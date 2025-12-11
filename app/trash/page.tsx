@@ -51,15 +51,15 @@ function TrashContent() {
         showSearch={true}
         onRefresh={handleRefresh}
         isRefreshing={isRefreshing}
-        actions={
-          <button
-            className="ml-2 px-3 py-1 rounded bg-red-500 text-white hover:bg-red-600 transition"
-            onClick={handleDeleteAll}
-          >
-            Delete all permanently
-          </button>
-        }
       />
+      <div className="px-4 py-2 flex justify-end">
+        <button
+          className="ml-2 px-3 py-1 rounded bg-red-500 text-white hover:bg-red-600 transition"
+          onClick={handleDeleteAll}
+        >
+          Delete all permanently
+        </button>
+      </div>
       <div className="flex-1 overflow-y-auto">
         <ThreadList
           threads={threads}

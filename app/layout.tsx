@@ -85,7 +85,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           <SessionProvider>
             <div className="flex h-screen overflow-hidden">
               <ClientSSERefresher />
-              <Sidebar labels={labelsData} inboxUnreadCount={inboxUnreadCount} />
+              <Sidebar />
               <main className="flex-1 overflow-hidden lg:ml-0">{children}</main>
             </div>
             <KeyboardShortcutsModal />

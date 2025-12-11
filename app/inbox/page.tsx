@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef, Suspense } from "react";
 import { Header } from "@/components/layout/Header";
 import { ThreadList } from "@/components/email/ThreadList";
 import type { Thread, Label } from "@/lib/db/schema";
+import { InboxSSERefresher } from "./InboxSSERefresher";
 
 interface ThreadWithLabels extends Thread {
   labels: (Label & { appliedBy?: string | null; confidence?: number | null })[];
@@ -34,6 +35,7 @@ function InboxContent() {
   }, [fetchThreads]);
 
   const handleRefresh = () => {
+    console.log("[Inbox] handleRefresh called");
     setIsRefreshing(true);
     fetchThreads();
   };
@@ -44,20 +46,21 @@ function InboxContent() {
 
   return (
     <div className="h-full flex flex-col">
+      <InboxSSERefresher refreshInbox={handleRefresh} />
       <Header
         title="Inbox"
         showSearch={true}
         onRefresh={handleRefresh}
         isRefreshing={isRefreshing}
-        actions={
-          <button
-            className="ml-2 px-3 py-1 rounded bg-blue-500 text-white hover:bg-blue-600 transition"
-            onClick={handleMarkAllRead}
-          >
-            Mark all as read
-          </button>
-        }
       />
+      <div className="px-4 py-2 flex justify-end">
+        <button
+          className="ml-2 px-3 py-1 rounded bg-blue-500 text-white hover:bg-blue-600 transition"
+          onClick={handleMarkAllRead}
+        >
+          Mark all as read
+        </button>
+      </div>
       <div className="flex-1 overflow-y-auto">
         <ThreadList
           threads={threads}

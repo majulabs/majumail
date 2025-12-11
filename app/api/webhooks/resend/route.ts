@@ -203,6 +203,7 @@ export async function POST(request: NextRequest) {
       });
 
     // Broadcast SSE event for new email
+    console.log("[Webhook] Broadcasting SSE new_email event");
     broadcastSSE({ type: "new_email" });
 
     return NextResponse.json({

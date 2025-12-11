@@ -9,8 +9,8 @@ import { Avatar } from "@/components/ui/Avatar";
 import { LabelList } from "@/components/labels/LabelList";
 import { Dropdown, DropdownItem, DropdownDivider } from "@/components/ui/Dropdown";
 import type { Label } from "@/lib/db/schema";
-import { useState } from "react";
-import { SidebarSSERefresher } from "./SidebarSSERefresher";
+import { useState, useEffect } from "react";
+import { useSidebarSSERefresh } from "@/components/hooks/useSidebarSSERefresh";
 
 interface LabelWithCount extends Label {
   threadCount: number;
@@ -18,14 +18,29 @@ interface LabelWithCount extends Label {
 }
 
 interface SidebarProps {
-  labels: LabelWithCount[];
-  inboxUnreadCount?: number;
   className?: string;
 }
 
-export function Sidebar({ labels, inboxUnreadCount = 0, className }: SidebarProps) {
+export function Sidebar({ className }: SidebarProps) {
   const { data: session } = useSession();
   const [isMobileOpen, setIsMobileOpen] = useState(false);
+  const [labels, setLabels] = useState<LabelWithCount[]>([]);
+  const [inboxUnreadCount, setInboxUnreadCount] = useState(0);
+
+  // Fetch sidebar data
+  const fetchSidebarData = async () => {
+    const res = await fetch("/api/sidebar-data");
+    const data = await res.json();
+    setLabels(data.labels || []);
+    setInboxUnreadCount(data.inboxUnreadCount || 0);
+  };
+
+  useEffect(() => {
+    fetchSidebarData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useSidebarSSERefresh(fetchSidebarData);
 
   return (
     <>
@@ -53,7 +68,6 @@ export function Sidebar({ labels, inboxUnreadCount = 0, className }: SidebarProp
           className
         )}
       >
-        <SidebarSSERefresher />
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-4 border-b border-gray-200 dark:border-gray-800">
           <Link href="/inbox" className="flex items-center gap-2">
