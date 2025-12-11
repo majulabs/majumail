@@ -10,6 +10,7 @@ import { LabelList } from "@/components/labels/LabelList";
 import { Dropdown, DropdownItem, DropdownDivider } from "@/components/ui/Dropdown";
 import type { Label } from "@/lib/db/schema";
 import { useState } from "react";
+import { SidebarSSERefresher } from "./SidebarSSERefresher";
 
 interface LabelWithCount extends Label {
   threadCount: number;
@@ -52,6 +53,7 @@ export function Sidebar({ labels, inboxUnreadCount = 0, className }: SidebarProp
           className
         )}
       >
+        <SidebarSSERefresher />
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-4 border-b border-gray-200 dark:border-gray-800">
           <Link href="/inbox" className="flex items-center gap-2">
