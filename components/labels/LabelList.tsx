@@ -117,18 +117,12 @@ function LabelListContent({ labels, inboxUnreadCount = 0, className }: LabelList
               )}
             >
               {systemLabelIcons[label.name] || <Tag className="h-4 w-4" />}
-              <span className={cn("flex-1", unread > 0 && "font-semibold")}>
-                {label.name}
-              </span>
-              {unread > 0 ? (
+              <span className={cn("flex-1", unread > 0 && "font-semibold")}>{label.name}</span>
+              {unread > 0 && (
                 <span className="min-w-5 h-5 flex items-center justify-center text-xs font-semibold bg-blue-600 text-white rounded-full px-1.5">
                   {unread > 99 ? "99+" : unread}
                 </span>
-              ) : label.threadCount > 0 ? (
-                <span className="text-xs text-gray-500 dark:text-gray-400">
-                  {label.threadCount}
-                </span>
-              ) : null}
+              )}
             </Link>
           );
         })}
@@ -160,21 +154,15 @@ function LabelListContent({ labels, inboxUnreadCount = 0, className }: LabelList
                     className="h-3 w-3 rounded-full shrink-0"
                     style={{ backgroundColor: label.color }}
                   />
-                  <span className={cn("flex-1 truncate", unread > 0 && "font-semibold")}>
-                    {label.name}
-                  </span>
-                  {unread > 0 ? (
+                  <span className={cn("flex-1 truncate", unread > 0 && "font-semibold")}>{label.name}</span>
+                  {unread > 0 && (
                     <span 
                       className="min-w-5 h-5 flex items-center justify-center text-xs font-semibold text-white rounded-full px-1.5"
                       style={{ backgroundColor: label.color }}
                     >
                       {unread > 99 ? "99+" : unread}
                     </span>
-                  ) : label.threadCount > 0 ? (
-                    <span className="text-xs text-gray-500 dark:text-gray-400">
-                      {label.threadCount}
-                    </span>
-                  ) : null}
+                  )}
                 </Link>
               );
             })}
