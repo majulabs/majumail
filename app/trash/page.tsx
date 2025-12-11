@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef, Suspense } from "react";
-import { useRouter } from "next/navigation";
 import { Header } from "@/components/layout/Header";
 import { ThreadList } from "@/components/email/ThreadList";
 import type { Thread, Label } from "@/lib/db/schema";
@@ -11,7 +10,6 @@ interface ThreadWithLabels extends Thread {
 }
 
 function TrashContent() {
-  const router = useRouter();
   const [threads, setThreads] = useState<ThreadWithLabels[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -42,13 +40,25 @@ function TrashContent() {
     fetchThreads();
   };
 
+  const handleDeleteAll = async () => {
+    // Implement delete all permanently logic here
+  };
+
   return (
     <div className="h-full flex flex-col">
       <Header
         title="Trash"
-        showSearch={false}
+        showSearch={true}
         onRefresh={handleRefresh}
         isRefreshing={isRefreshing}
+        actions={
+          <button
+            className="ml-2 px-3 py-1 rounded bg-red-500 text-white hover:bg-red-600 transition"
+            onClick={handleDeleteAll}
+          >
+            Delete all permanently
+          </button>
+        }
       />
       <div className="flex-1 overflow-y-auto">
         <ThreadList

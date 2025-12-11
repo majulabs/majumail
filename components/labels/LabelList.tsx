@@ -42,46 +42,28 @@ function LabelListContent({ labels, inboxUnreadCount = 0, className }: LabelList
 
   const getLabelHref = (label: LabelWithCount) => {
     if (label.name === "Inbox") return "/inbox";
-    if (label.name === "Sent") return "/inbox?filter=sent";
-    if (label.name === "Archived") return "/inbox?archived=true";
-    if (label.name === "Trash") return "/inbox?trashed=true";
-    if (label.name === "Starred") return "/inbox?starred=true";
-    return `/inbox/label/${label.id}`;
+    if (label.name === "Sent") return "/sent";
+    if (label.name === "Archived") return "/archived";
+    if (label.name === "Trash") return "/trash";
+    if (label.name === "Starred") return "/starred";
+    return `/label/${label.id}`;
   };
 
   const isActive = (label: LabelWithCount) => {
-    // Check custom labels by path
     if (!label.isSystem) {
-      return pathname.includes(`/label/${label.id}`);
+      return pathname === `/label/${label.id}`;
     }
-
-    // For system labels, check both pathname and query params
-    const filter = searchParams.get("filter");
-    const archived = searchParams.get("archived");
-    const trashed = searchParams.get("trashed");
-    const starred = searchParams.get("starred");
-
-    // If we're on a thread detail page or label page, no system label is active
-    if (pathname.includes("/inbox/") && !pathname.endsWith("/inbox")) {
-      // Check if it's a thread page (UUID pattern) - no system label active
-      const pathParts = pathname.split("/");
-      const lastPart = pathParts[pathParts.length - 1];
-      if (lastPart && lastPart.match(/^[0-9a-f-]{36}$/i)) {
-        return false;
-      }
-    }
-
     switch (label.name) {
       case "Inbox":
-        return pathname === "/inbox" && !filter && !archived && !trashed && !starred;
+        return pathname === "/inbox";
       case "Sent":
-        return filter === "sent";
+        return pathname === "/sent";
       case "Archived":
-        return archived === "true";
+        return pathname === "/archived";
       case "Trash":
-        return trashed === "true";
+        return pathname === "/trash";
       case "Starred":
-        return starred === "true";
+        return pathname === "/starred";
       default:
         return false;
     }
