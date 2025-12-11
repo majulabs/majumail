@@ -4,7 +4,7 @@ import { emails, threadLabels, labels, aiLabelRules, contacts } from "@/lib/db/s
 import { parseInboundEmail } from "@/lib/utils/email-parser";
 import { findOrCreateThread, updateThreadAfterNewEmail } from "@/lib/utils/threads";
 import { classifyEmail, buildLabelRulesFromDb } from "@/lib/ai/classify";
-import { verifyWebhookSignature } from "@/lib/resend/client";
+import { verifyWebhookSignature, getEmailDetails } from "@/lib/resend/client";
 import { extractEmailAddress } from "@/lib/utils/format";
 import type { ResendInboundPayload } from "@/lib/types";
 import { eq, sql } from "drizzle-orm";
@@ -37,8 +37,22 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ received: true });
     }
 
+    // If we have an email_id, fetch the full email content from Resend
+    let fullEmailContent: { text?: string; html?: string } | null = null;
+    if (payload.data.email_id) {
+      fullEmailContent = await getEmailDetails(payload.data.email_id);
+      console.log("Fetched full email content:", fullEmailContent ? "success" : "failed");
+    }
+
+    // Merge full content into payload if available
+    const enrichedPayload = {
+      ...payload.data,
+      text: fullEmailContent?.text || payload.data.text,
+      html: fullEmailContent?.html || payload.data.html,
+    };
+
     // Parse the email
-    const parsed = parseInboundEmail(payload.data);
+    const parsed = parseInboundEmail(enrichedPayload);
 
     // Get all participants
     const participants = [

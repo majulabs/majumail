@@ -88,7 +88,13 @@ function LabelListContent({ labels, inboxUnreadCount = 0, className }: LabelList
   };
 
   // Get the unread count for a label
+  // Note: "Sent" doesn't have unread count - you sent those emails
   const getUnreadCount = (label: LabelWithCount) => {
+    // Sent emails are always "read" since you sent them
+    if (label.name === "Sent") return 0;
+    // Trash and Archived don't typically show unread counts
+    if (label.name === "Trash" || label.name === "Archived") return 0;
+    // For Inbox, use the dedicated inbox unread count
     if (label.name === "Inbox") return inboxUnreadCount;
     return label.unreadCount || 0;
   };

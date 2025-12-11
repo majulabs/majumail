@@ -62,4 +62,32 @@ export async function verifyWebhookSignature(
   }
 }
 
+// Fetch full email details from Resend API
+export async function getEmailDetails(emailId: string): Promise<{
+  text?: string;
+  html?: string;
+} | null> {
+  try {
+    const response = await fetch(`https://api.resend.com/emails/${emailId}`, {
+      headers: {
+        Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
+      },
+    });
+
+    if (!response.ok) {
+      console.error(`Failed to fetch email ${emailId}: ${response.status}`);
+      return null;
+    }
+
+    const data = await response.json();
+    return {
+      text: data.text,
+      html: data.html,
+    };
+  } catch (error) {
+    console.error(`Error fetching email ${emailId}:`, error);
+    return null;
+  }
+}
+
 export { resend };
