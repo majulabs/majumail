@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { ThreadView } from "@/components/email/ThreadView";
@@ -17,6 +17,7 @@ export default function ThreadPage() {
   const params = useParams();
   const router = useRouter();
   const threadId = params.threadId as string;
+  const hasRefreshed = useRef(false);
 
   const [thread, setThread] = useState<ThreadWithRelations | null>(null);
   const [allLabels, setAllLabels] = useState<Label[]>([]);
@@ -39,12 +40,18 @@ export default function ThreadPage() {
       setThread(threadData.thread);
       setAllLabels(labelsData.labels || []);
       setMailboxes(mailboxesData.mailboxes || []);
+      
+      // Refresh server components once to update sidebar unread counts
+      if (!hasRefreshed.current) {
+        hasRefreshed.current = true;
+        router.refresh();
+      }
     } catch (error) {
       console.error("Failed to fetch thread:", error);
     } finally {
       setIsLoading(false);
     }
-  }, [threadId]);
+  }, [threadId, router]);
 
   useEffect(() => {
     fetchThread();

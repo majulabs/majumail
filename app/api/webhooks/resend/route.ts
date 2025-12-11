@@ -14,7 +14,8 @@ export async function POST(request: NextRequest) {
     const body = await request.text();
     
     // Log incoming webhook for debugging
-    console.log("Webhook received:", body.substring(0, 500));
+    console.log("=== WEBHOOK RECEIVED ===");
+    console.log("Full payload:", body);
     
     // Get svix headers for verification
     const svixHeaders: Record<string, string> = {
@@ -31,25 +32,50 @@ export async function POST(request: NextRequest) {
     }
 
     const payload: ResendInboundPayload = JSON.parse(body);
+    
+    console.log("=== PARSED PAYLOAD ===");
+    console.log("Type:", payload.type);
+    console.log("Data keys:", Object.keys(payload.data || {}).join(", "));
+    console.log("Has text:", !!payload.data?.text, "Length:", payload.data?.text?.length || 0);
+    console.log("Has html:", !!payload.data?.html, "Length:", payload.data?.html?.length || 0);
+    console.log("Email ID:", payload.data?.email_id);
 
     // Only handle email.received events
     if (payload.type !== "email.received") {
       return NextResponse.json({ received: true });
     }
 
-    // If we have an email_id, fetch the full email content from Resend
-    let fullEmailContent: { text?: string; html?: string } | null = null;
+    // For inbound emails, we MUST fetch the body from the Received Emails API
+    // The webhook only contains metadata, not the actual body content
+    let textContent: string | undefined;
+    let htmlContent: string | undefined;
+    
     if (payload.data.email_id) {
-      fullEmailContent = await getEmailDetails(payload.data.email_id);
-      console.log("Fetched full email content:", fullEmailContent ? "success" : "failed");
+      console.log("Fetching email content from Received Emails API...");
+      // Use isReceived=true for the /emails/receiving/:id endpoint
+      const fullEmailContent = await getEmailDetails(payload.data.email_id, true);
+      if (fullEmailContent) {
+        textContent = fullEmailContent.text;
+        htmlContent = fullEmailContent.html;
+        console.log("API fetch result - text:", !!textContent, "length:", textContent?.length || 0);
+        console.log("API fetch result - html:", !!htmlContent, "length:", htmlContent?.length || 0);
+      } else {
+        console.log("Failed to fetch email content from API");
+      }
+    } else {
+      console.log("No email_id in payload, cannot fetch content");
     }
 
-    // Merge full content into payload if available
+    // Merge full content into payload
     const enrichedPayload = {
       ...payload.data,
-      text: fullEmailContent?.text || payload.data.text,
-      html: fullEmailContent?.html || payload.data.html,
+      text: textContent,
+      html: htmlContent,
     };
+    
+    console.log("=== ENRICHED PAYLOAD ===");
+    console.log("Final text length:", enrichedPayload.text?.length || 0);
+    console.log("Final html length:", enrichedPayload.html?.length || 0);
 
     // Parse the email
     const parsed = parseInboundEmail(enrichedPayload);
