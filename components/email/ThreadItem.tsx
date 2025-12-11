@@ -77,17 +77,25 @@ export function ThreadItem({
             </span>
           </div>
 
-          {/* Subject */}
-          <p
-            className={cn(
-              "text-sm truncate mt-0.5",
-              !thread.isRead
-                ? "font-medium text-gray-900 dark:text-gray-100"
-                : "text-gray-600 dark:text-gray-400"
+          {/* Subject + Unread Dot */}
+          <div className="flex items-center gap-2">
+            <p
+              className={cn(
+                "text-sm truncate mt-0.5",
+                !thread.isRead
+                  ? "font-medium text-gray-900 dark:text-gray-100"
+                  : "text-gray-600 dark:text-gray-400"
+              )}
+            >
+              {thread.subject || "(No subject)"}
+            </p>
+            {!thread.isRead && (
+              <span
+                className="inline-block w-2 h-2 rounded-full bg-blue-500 ml-1"
+                title="Unread"
+              />
             )}
-          >
-            {thread.subject || "(No subject)"}
-          </p>
+          </div>
 
           {/* Snippet */}
           <p className="text-sm text-gray-500 dark:text-gray-500 truncate mt-0.5">

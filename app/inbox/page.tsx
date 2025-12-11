@@ -70,6 +70,17 @@ function InboxContent() {
     }
   };
 
+  // Mark all as read
+  const handleMarkAllAsRead = async () => {
+    try {
+      await fetch("/api/threads/mark-all-read", { method: "POST" });
+      handleRefresh();
+      router.refresh(); // Refresh sidebar counts
+    } catch (error) {
+      console.error("Failed to mark all as read:", error);
+    }
+  };
+
   // Get selected thread for shortcuts
   const selectedThread = selectedIndex >= 0 ? threads[selectedIndex] : null;
 
@@ -135,17 +146,22 @@ function InboxContent() {
         isRefreshing={isRefreshing}
       />
       <div className="flex-1 overflow-y-auto">
+        <div className="flex items-center justify-between mb-2">
+          <h2 className="text-lg font-semibold">Inbox</h2>
+          <button
+            onClick={handleMarkAllAsRead}
+            className="text-xs px-3 py-1 rounded bg-gray-100 dark:bg-gray-800 hover:bg-blue-500 hover:text-white dark:hover:bg-blue-600 transition-colors"
+          >
+            Mark all as read
+          </button>
+        </div>
         <ThreadList
           threads={threads}
-          isLoading={isLoading}
+          isLoading={isLoading || isRefreshing}
           selectedIndex={selectedIndex}
           onSelectIndex={setSelectedIndex}
           threadRefs={threadRefs}
-          onStarThread={(id) =>
-            updateThread(id, {
-              isStarred: !threads.find((t) => t.id === id)?.isStarred,
-            })
-          }
+          onStarThread={(id) => updateThread(id, { isStarred: true })}
           onArchiveThread={(id) => updateThread(id, { isArchived: true })}
           onTrashThread={(id) => updateThread(id, { isTrashed: true })}
         />
