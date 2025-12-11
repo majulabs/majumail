@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { createSSEStream, sendSSEEvent } from "@/lib/utils/sse";
+import { createSSEStream } from "@/lib/utils/sse";
 
 // In-memory list of response objects to broadcast events (for demo/dev only)
 const clients: any[] = [];
