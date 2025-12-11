@@ -65,6 +65,7 @@ function InboxContent() {
         body: JSON.stringify(updates),
       });
       fetchThreads();
+      router.refresh(); // Always refresh sidebar/counts after update
     } catch (error) {
       console.error("Failed to update thread:", error);
     }

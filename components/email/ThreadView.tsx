@@ -134,7 +134,16 @@ export function ThreadView({
                 </button>
               }
             >
-              <DropdownItem onClick={() => {}}>Mark as unread</DropdownItem>
+              <DropdownItem onClick={async () => {
+                await fetch(`/api/threads/${thread.id}`, {
+                  method: "PATCH",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ isRead: false }),
+                });
+                router.refresh();
+              }}>
+                Mark as unread
+              </DropdownItem>
               <DropdownDivider />
               <DropdownItem onClick={onTrash} className="text-red-600">
                 Delete permanently
