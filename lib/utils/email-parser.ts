@@ -1,11 +1,13 @@
 import type { ResendInboundPayload } from "../types";
 
 export function parseInboundEmail(payload: ResendInboundPayload["data"]) {
+  // Headers may not be present in all webhook payloads
   const headers = new Map(
-    payload.headers.map((h) => [h.name.toLowerCase(), h.value])
+    (payload.headers || []).map((h) => [h.name.toLowerCase(), h.value])
   );
 
-  const messageId = headers.get("message-id") || undefined;
+  // Get message ID from headers or directly from payload
+  const messageId = payload.message_id || headers.get("message-id") || undefined;
   const inReplyTo = headers.get("in-reply-to") || undefined;
   const referencesRaw = headers.get("references") || "";
   const references = referencesRaw
@@ -28,8 +30,8 @@ export function parseInboundEmail(payload: ResendInboundPayload["data"]) {
     bccAddresses: payload.bcc || [],
     replyTo: payload.reply_to,
     subject: payload.subject,
-    bodyText: payload.text,
-    bodyHtml: payload.html,
+    bodyText: payload.text || "(No content available)",
+    bodyHtml: payload.html || undefined,
     attachments: payload.attachments || [],
     headers: Object.fromEntries(headers),
   };

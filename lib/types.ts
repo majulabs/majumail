@@ -47,23 +47,28 @@ export interface SendEmailRequest {
 }
 
 // Resend inbound webhook payload
+// Note: The webhook payload structure may vary - some fields are optional
 export interface ResendInboundPayload {
-  type: "email.received";
+  type: "email.received" | "email.sent" | "email.delivered" | "email.bounced" | "email.complained";
+  created_at?: string;
   data: {
+    email_id?: string;
     from: string;
     to: string[];
     cc?: string[];
     bcc?: string[];
     reply_to?: string;
     subject: string;
-    text: string;
-    html: string;
+    text?: string;
+    html?: string;
+    message_id?: string;
+    created_at?: string;
     attachments?: Array<{
       filename: string;
       content_type: string;
       content: string;
     }>;
-    headers: Array<{
+    headers?: Array<{
       name: string;
       value: string;
     }>;

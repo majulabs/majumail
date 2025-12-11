@@ -13,6 +13,9 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.text();
     
+    // Log incoming webhook for debugging
+    console.log("Webhook received:", body.substring(0, 500));
+    
     // Get svix headers for verification
     const svixHeaders: Record<string, string> = {
       "svix-id": request.headers.get("svix-id") || "",
@@ -165,8 +168,9 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     console.error("Webhook error:", error);
+    console.error("Error stack:", error instanceof Error ? error.stack : "No stack");
     return NextResponse.json(
-      { error: "Internal server error" },
+      { error: "Internal server error", details: error instanceof Error ? error.message : "Unknown error" },
       { status: 500 }
     );
   }
