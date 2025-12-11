@@ -1,0 +1,45 @@
+{
+  "name": "majumail",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint",
+    "db:push": "drizzle-kit push",
+    "db:studio": "drizzle-kit studio",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "db:seed": "tsx scripts/seed.ts"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.71.2",
+    "@auth/drizzle-adapter": "^1.11.1",
+    "@neondatabase/serverless": "^1.0.2",
+    "clsx": "^2.1.1",
+    "date-fns": "^4.1.0",
+    "dotenv": "^17.2.3",
+    "drizzle-orm": "^0.45.1",
+    "lucide-react": "^0.559.0",
+    "next": "16.0.8",
+    "next-auth": "^5.0.0-beta.30",
+    "react": "19.2.1",
+    "react-dom": "19.2.1",
+    "resend": "^6.6.0",
+    "svix": "^1.82.0",
+    "tailwind-merge": "^3.4.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "drizzle-kit": "^0.31.8",
+    "eslint": "^9",
+    "eslint-config-next": "16.0.8",
+    "tailwindcss": "^4",
+    "tsx": "^4.21.0",
+    "typescript": "^5"
+  }
+}
