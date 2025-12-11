@@ -2,6 +2,7 @@ import { Sidebar } from "@/components/layout/Sidebar";
 import { db } from "@/lib/db";
 import { labels, threadLabels, threads, emails } from "@/lib/db/schema";
 import { sql, asc, eq, and } from "drizzle-orm";
+import { ClientSSERefresher } from "./ClientSSERefresher";
 
 async function getLabelsWithCounts() {
   // Get all labels with thread counts and unread counts
@@ -53,6 +54,7 @@ export default async function InboxLayout({
 
   return (
     <div className="flex h-screen overflow-hidden">
+      <ClientSSERefresher />
       <Sidebar labels={labelsData} inboxUnreadCount={inboxUnreadCount} />
       <main className="flex-1 overflow-hidden lg:ml-0">
         {children}

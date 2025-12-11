@@ -8,6 +8,7 @@ import { verifyWebhookSignature, getEmailDetails } from "@/lib/resend/client";
 import { extractEmailAddress } from "@/lib/utils/format";
 import type { ResendInboundPayload } from "@/lib/types";
 import { eq, sql } from "drizzle-orm";
+import { broadcastSSE } from "@/app/api/sse/route";
 
 export async function POST(request: NextRequest) {
   try {
@@ -200,6 +201,9 @@ export async function POST(request: NextRequest) {
           contactCount: sql`${contacts.contactCount} + 1`,
         },
       });
+
+    // Broadcast SSE event for new email
+    broadcastSSE({ type: "new_email" });
 
     return NextResponse.json({
       received: true,
