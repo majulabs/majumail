@@ -82,6 +82,13 @@ function InboxContent() {
     }
   };
 
+  // Permanently delete all trashed threads
+  const handleDeleteAllTrashed = async () => {
+    await fetch("/api/threads/delete-all-trashed", { method: "DELETE" });
+    handleRefresh();
+    router.refresh();
+  };
+
   // Get selected thread for shortcuts
   const selectedThread = selectedIndex >= 0 ? threads[selectedIndex] : null;
 
@@ -148,13 +155,22 @@ function InboxContent() {
       />
       <div className="flex-1 overflow-y-auto">
         <div className="flex items-center justify-between mb-2">
-          <h2 className="text-lg font-semibold">Inbox</h2>
-          <button
-            onClick={handleMarkAllAsRead}
-            className="text-xs px-3 py-1 rounded bg-gray-100 dark:bg-gray-800 hover:bg-blue-500 hover:text-white dark:hover:bg-blue-600 transition-colors"
-          >
-            Mark all as read
-          </button>
+          <h2 className="text-lg font-semibold">{getTitle()}</h2>
+          {trashed ? (
+            <button
+              onClick={handleDeleteAllTrashed}
+              className="text-xs px-3 py-1 rounded bg-red-100 dark:bg-red-900 hover:bg-red-500 hover:text-white dark:hover:bg-red-600 transition-colors"
+            >
+              Delete all permanently
+            </button>
+          ) : (
+            <button
+              onClick={handleMarkAllAsRead}
+              className="text-xs px-3 py-1 rounded bg-gray-100 dark:bg-gray-800 hover:bg-blue-500 hover:text-white dark:hover:bg-blue-600 transition-colors"
+            >
+              Mark all as read
+            </button>
+          )}
         </div>
         <ThreadList
           threads={threads}

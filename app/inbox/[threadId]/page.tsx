@@ -195,9 +195,15 @@ export default function ThreadPage() {
             updateThread({ isArchived: !thread.isArchived });
             router.push("/inbox");
           }}
-          onTrash={() => {
-            updateThread({ isTrashed: !thread.isTrashed });
-            router.push("/inbox");
+          onTrash={async () => {
+            if (thread.isTrashed) {
+              await fetch(`/api/threads/${threadId}`, { method: "DELETE" });
+              router.push("/inbox?trashed=true");
+              router.refresh();
+            } else {
+              updateThread({ isTrashed: true });
+              router.push("/inbox?trashed=true");
+            }
           }}
           onAddLabel={addLabel}
           onRemoveLabel={removeLabel}
