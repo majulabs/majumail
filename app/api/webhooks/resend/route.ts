@@ -1,8 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { emails, threadLabels, labels, aiLabelRules, contacts } from "@/lib/db/schema";
+import {
+  emails,
+  threadLabels,
+  labels,
+  aiLabelRules,
+  contacts,
+} from "@/lib/db/schema";
 import { parseInboundEmail } from "@/lib/utils/email-parser";
-import { findOrCreateThread, updateThreadAfterNewEmail } from "@/lib/utils/threads";
+import {
+  findOrCreateThread,
+  updateThreadAfterNewEmail,
+} from "@/lib/utils/threads";
 import { classifyEmail, buildLabelRulesFromDb } from "@/lib/ai/classify";
 import { verifyWebhookSignature, getEmailDetails } from "@/lib/resend/client";
 import { extractEmailAddress } from "@/lib/utils/format";
@@ -10,14 +19,18 @@ import type { ResendInboundPayload } from "@/lib/types";
 import { eq, sql } from "drizzle-orm";
 import { broadcastSSE } from "@/app/api/sse/route";
 
+const isDev = process.env.NODE_ENV === "development";
+
+function log(...args: unknown[]) {
+  if (isDev) {
+    console.log(...args);
+  }
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.text();
-    
-    // Log incoming webhook for debugging
-    console.log("=== WEBHOOK RECEIVED ===");
-    console.log("Full payload:", body);
-    
+
     // Get svix headers for verification
     const svixHeaders: Record<string, string> = {
       "svix-id": request.headers.get("svix-id") || "",
@@ -33,38 +46,33 @@ export async function POST(request: NextRequest) {
     }
 
     const payload: ResendInboundPayload = JSON.parse(body);
-    
-    console.log("=== PARSED PAYLOAD ===");
-    console.log("Type:", payload.type);
-    console.log("Data keys:", Object.keys(payload.data || {}).join(", "));
-    console.log("Has text:", !!payload.data?.text, "Length:", payload.data?.text?.length || 0);
-    console.log("Has html:", !!payload.data?.html, "Length:", payload.data?.html?.length || 0);
-    console.log("Email ID:", payload.data?.email_id);
+
+    log("[Webhook] Event type:", payload.type);
 
     // Only handle email.received events
     if (payload.type !== "email.received") {
       return NextResponse.json({ received: true });
     }
 
-    // For inbound emails, we MUST fetch the body from the Received Emails API
-    // The webhook only contains metadata, not the actual body content
+    // For inbound emails, fetch the body from the Received Emails API
     let textContent: string | undefined;
     let htmlContent: string | undefined;
-    
+
     if (payload.data.email_id) {
-      console.log("Fetching email content from Received Emails API...");
-      // Use isReceived=true for the /emails/receiving/:id endpoint
-      const fullEmailContent = await getEmailDetails(payload.data.email_id, true);
+      log("[Webhook] Fetching email content from API...");
+      const fullEmailContent = await getEmailDetails(
+        payload.data.email_id,
+        true
+      );
       if (fullEmailContent) {
         textContent = fullEmailContent.text;
         htmlContent = fullEmailContent.html;
-        console.log("API fetch result - text:", !!textContent, "length:", textContent?.length || 0);
-        console.log("API fetch result - html:", !!htmlContent, "length:", htmlContent?.length || 0);
+        log("[Webhook] Email content fetched successfully");
       } else {
-        console.log("Failed to fetch email content from API");
+        console.warn(
+          "[Webhook] Failed to fetch email content from API"
+        );
       }
-    } else {
-      console.log("No email_id in payload, cannot fetch content");
     }
 
     // Merge full content into payload
@@ -73,10 +81,6 @@ export async function POST(request: NextRequest) {
       text: textContent,
       html: htmlContent,
     };
-    
-    console.log("=== ENRICHED PAYLOAD ===");
-    console.log("Final text length:", enrichedPayload.text?.length || 0);
-    console.log("Final html length:", enrichedPayload.html?.length || 0);
 
     // Parse the email
     const parsed = parseInboundEmail(enrichedPayload);
@@ -158,28 +162,33 @@ export async function POST(request: NextRequest) {
     const labelRules = buildLabelRulesFromDb(rules);
 
     if (labelRules.length > 0) {
-      const classifications = await classifyEmail(
-        {
-          from: parsed.fromAddress,
-          subject: parsed.subject || "",
-          body: parsed.bodyText || "",
-        },
-        labelRules
-      );
+      try {
+        const classifications = await classifyEmail(
+          {
+            from: parsed.fromAddress,
+            subject: parsed.subject || "",
+            body: parsed.bodyText || "",
+          },
+          labelRules
+        );
 
-      // Apply labels with confidence >= 70
-      for (const classification of classifications) {
-        if (classification.confidence >= 70) {
-          await db
-            .insert(threadLabels)
-            .values({
-              threadId,
-              labelId: classification.labelId,
-              appliedBy: "ai",
-              confidence: classification.confidence,
-            })
-            .onConflictDoNothing();
+        // Apply labels with confidence >= 70
+        for (const classification of classifications) {
+          if (classification.confidence >= 70) {
+            await db
+              .insert(threadLabels)
+              .values({
+                threadId,
+                labelId: classification.labelId,
+                appliedBy: "ai",
+                confidence: classification.confidence,
+              })
+              .onConflictDoNothing();
+          }
         }
+      } catch (error) {
+        console.error("[Webhook] AI classification failed:", error);
+        // Continue processing - AI classification is not critical
       }
     }
 
@@ -203,8 +212,7 @@ export async function POST(request: NextRequest) {
       });
 
     // Broadcast SSE event for new email
-    console.log("[Webhook] Broadcasting SSE new_email event");
-    broadcastSSE({ type: "new_email" });
+    broadcastSSE({ type: "new_email", data: { threadId, emailId: newEmail.id } });
 
     return NextResponse.json({
       received: true,
@@ -212,10 +220,13 @@ export async function POST(request: NextRequest) {
       emailId: newEmail.id,
     });
   } catch (error) {
-    console.error("Webhook error:", error);
-    console.error("Error stack:", error instanceof Error ? error.stack : "No stack");
+    console.error("[Webhook] Error:", error);
     return NextResponse.json(
-      { error: "Internal server error", details: error instanceof Error ? error.message : "Unknown error" },
+      {
+        error: "Internal server error",
+        details:
+          error instanceof Error ? error.message : "Unknown error",
+      },
       { status: 500 }
     );
   }

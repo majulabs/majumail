@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Modal } from "@/components/ui/Modal";
-import { SHORTCUT_GROUPS } from "@/hooks/useKeyboardShortcuts";
+import { SHORTCUT_GROUPS } from "@/lib/hooks/useKeyboardShortcuts";
 
 export function KeyboardShortcutsModal() {
   const [isOpen, setIsOpen] = useState(false);

@@ -1,18 +1,17 @@
 "use client";
 
 import Link from "next/link";
-import { Suspense } from "react";
-import { usePathname, useSearchParams } from "next/navigation";
-import { cn } from "@/lib/utils/cn";
-import type { Label } from "@/lib/db/schema";
+import { usePathname } from "next/navigation";
 import {
   Inbox,
   Send,
+  Star,
   Archive,
   Trash2,
-  Star,
   Tag,
 } from "lucide-react";
+import { cn } from "@/lib/utils/cn";
+import type { Label } from "@/lib/db/schema";
 
 interface LabelWithCount extends Label {
   threadCount: number;
@@ -22,143 +21,114 @@ interface LabelWithCount extends Label {
 interface LabelListProps {
   labels: LabelWithCount[];
   inboxUnreadCount?: number;
-  className?: string;
+  onNavigate?: () => void;
 }
 
-const systemLabelIcons: Record<string, React.ReactNode> = {
-  Inbox: <Inbox className="h-4 w-4" />,
-  Sent: <Send className="h-4 w-4" />,
-  Archived: <Archive className="h-4 w-4" />,
-  Trash: <Trash2 className="h-4 w-4" />,
-  Starred: <Star className="h-4 w-4" />,
-};
+// Core navigation items that always show (regardless of database labels)
+const CORE_NAV_ITEMS = [
+  { name: "Inbox", icon: Inbox, href: "/inbox" },
+  { name: "Sent", icon: Send, href: "/sent" },
+  { name: "Starred", icon: Star, href: "/starred" },
+  { name: "Archive", icon: Archive, href: "/archived" },
+  { name: "Trash", icon: Trash2, href: "/trash" },
+];
 
-function LabelListContent({ labels, inboxUnreadCount = 0, className }: LabelListProps) {
+export function LabelList({
+  labels,
+  inboxUnreadCount = 0,
+  onNavigate,
+}: LabelListProps) {
   const pathname = usePathname();
-  const searchParams = useSearchParams();
 
-  const systemLabels = labels.filter((l) => l.isSystem);
+  // Create a map of label names to their data for quick lookup
+  const labelsByName = new Map(
+    labels.filter((l) => l.isSystem).map((l) => [l.name, l])
+  );
+
+  // Get custom (non-system) labels
   const customLabels = labels.filter((l) => !l.isSystem);
 
-  const getLabelHref = (label: LabelWithCount) => {
-    if (label.name === "Inbox") return "/inbox";
-    if (label.name === "Sent") return "/sent";
-    if (label.name === "Archived") return "/archived";
-    if (label.name === "Trash") return "/trash";
-    if (label.name === "Starred") return "/starred";
-    return `/label/${label.id}`;
-  };
-
-  const isActive = (label: LabelWithCount) => {
-    if (!label.isSystem) {
-      return pathname === `/label/${label.id}`;
-    }
-    switch (label.name) {
-      case "Inbox":
-        return pathname === "/inbox";
-      case "Sent":
-        return pathname === "/sent";
-      case "Archived":
-        return pathname === "/archived";
-      case "Trash":
-        return pathname === "/trash";
-      case "Starred":
-        return pathname === "/starred";
-      default:
-        return false;
-    }
-  };
-
-  // Get the unread count for a label
-  // Note: "Sent" doesn't have unread count - you sent those emails
-  const getUnreadCount = (label: LabelWithCount) => {
-    // Sent emails are always "read" since you sent them
-    if (label.name === "Sent") return 0;
-    // Trash and Archived don't typically show unread counts
-    if (label.name === "Trash" || label.name === "Archived") return 0;
-    // For Inbox, use the dedicated inbox unread count
-    if (label.name === "Inbox") return inboxUnreadCount;
-    return label.unreadCount || 0;
-  };
-
   return (
-    <nav className={cn("space-y-1", className)}>
-      {/* System Labels */}
-      <div className="space-y-1">
-        {systemLabels.map((label) => {
-          const unread = getUnreadCount(label);
-          return (
-            <Link
-              key={label.id}
-              href={getLabelHref(label)}
-              className={cn(
-                "flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
-                isActive(label)
-                  ? "bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300"
-                  : "text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800"
-              )}
-            >
-              {systemLabelIcons[label.name] || <Tag className="h-4 w-4" />}
-              <span className={cn("flex-1", unread > 0 && "font-semibold")}>{label.name}</span>
-              {unread > 0 && (
-                <span className="min-w-5 h-5 flex items-center justify-center text-xs font-semibold bg-blue-600 text-white rounded-full px-1.5">
-                  {unread > 99 ? "99+" : unread}
-                </span>
-              )}
-            </Link>
-          );
-        })}
-      </div>
+    <div className="space-y-1">
+      {/* Core Navigation Items - Always Shown */}
+      {CORE_NAV_ITEMS.map((item) => {
+        const Icon = item.icon;
+        const isActive = pathname === item.href;
+        
+        // Try to get count from database label if it exists
+        const dbLabel = labelsByName.get(item.name);
+        const unreadCount = item.name === "Inbox" 
+          ? inboxUnreadCount 
+          : dbLabel?.unreadCount;
+
+        return (
+          <Link
+            key={item.name}
+            href={item.href}
+            onClick={onNavigate}
+            className={cn(
+              "flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
+              isActive
+                ? "bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300"
+                : "text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800"
+            )}
+          >
+            <Icon className="h-4 w-4" />
+            <span className="flex-1">{item.name}</span>
+            {unreadCount !== undefined && unreadCount > 0 && (
+              <span
+                className={cn(
+                  "text-xs px-2 py-0.5 rounded-full",
+                  isActive
+                    ? "bg-blue-100 text-blue-700 dark:bg-blue-800 dark:text-blue-200"
+                    : "bg-gray-200 text-gray-600 dark:bg-gray-700 dark:text-gray-300"
+                )}
+              >
+                {unreadCount > 99 ? "99+" : unreadCount}
+              </span>
+            )}
+          </Link>
+        );
+      })}
 
       {/* Custom Labels */}
       {customLabels.length > 0 && (
         <>
-          <div className="pt-4 pb-2">
-            <span className="px-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+          <div className="px-3 pt-4 pb-2">
+            <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
               Labels
             </span>
           </div>
-          <div className="space-y-1">
-            {customLabels.map((label) => {
-              const unread = label.unreadCount || 0;
-              return (
-                <Link
-                  key={label.id}
-                  href={`/inbox/label/${label.id}`}
-                  className={cn(
-                    "flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
-                    isActive(label)
-                      ? "bg-gray-100 dark:bg-gray-800"
-                      : "text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800"
-                  )}
-                >
-                  <span
-                    className="h-3 w-3 rounded-full shrink-0"
-                    style={{ backgroundColor: label.color }}
-                  />
-                  <span className={cn("flex-1 truncate", unread > 0 && "font-semibold")}>{label.name}</span>
-                  {unread > 0 && (
-                    <span 
-                      className="min-w-5 h-5 flex items-center justify-center text-xs font-semibold text-white rounded-full px-1.5"
-                      style={{ backgroundColor: label.color }}
-                    >
-                      {unread > 99 ? "99+" : unread}
-                    </span>
-                  )}
-                </Link>
-              );
-            })}
-          </div>
+          {customLabels.map((label) => {
+            const isActive = pathname === `/inbox/label/${label.id}`;
+
+            return (
+              <Link
+                key={label.id}
+                href={`/inbox/label/${label.id}`}
+                onClick={onNavigate}
+                className={cn(
+                  "flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
+                  isActive
+                    ? "bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300"
+                    : "text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800"
+                )}
+              >
+                <Tag
+                  className="h-4 w-4"
+                  style={{ color: label.color || undefined }}
+                />
+                <span className="flex-1 truncate">{label.name}</span>
+                {label.threadCount > 0 && (
+                  <span className="text-xs text-gray-500 dark:text-gray-400">
+                    {label.threadCount}
+                  </span>
+                )}
+              </Link>
+            );
+          })}
         </>
       )}
-    </nav>
-  );
-}
-
-export function LabelList(props: LabelListProps) {
-  return (
-    <Suspense fallback={<div className="px-3 py-2 text-sm text-gray-500">Loading...</div>}>
-      <LabelListContent {...props} />
-    </Suspense>
+    </div>
   );
 }

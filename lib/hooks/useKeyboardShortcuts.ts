@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useCallback } from "react";
+import { useEffect, useCallback, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 interface Shortcut {
@@ -18,7 +18,6 @@ interface UseKeyboardShortcutsOptions {
   shortcuts?: Shortcut[];
 }
 
-// Default shortcuts for the email app
 export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions = {}) {
   const { enabled = true, shortcuts = [] } = options;
 
@@ -39,8 +38,11 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions = {}) 
       }
 
       for (const shortcut of shortcuts) {
-        const keyMatch = event.key.toLowerCase() === shortcut.key.toLowerCase();
-        const ctrlMatch = shortcut.ctrl ? event.ctrlKey || event.metaKey : !event.ctrlKey && !event.metaKey;
+        const keyMatch =
+          event.key.toLowerCase() === shortcut.key.toLowerCase();
+        const ctrlMatch = shortcut.ctrl
+          ? event.ctrlKey || event.metaKey
+          : !event.ctrlKey && !event.metaKey;
         const shiftMatch = shortcut.shift ? event.shiftKey : !event.shiftKey;
         const altMatch = shortcut.alt ? event.altKey : !event.altKey;
 
@@ -62,7 +64,7 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions = {}) 
   }, [enabled, handleKeyDown]);
 }
 
-// Pre-built shortcuts hook for inbox
+// Pre-built shortcuts hook for inbox with two-key sequence support
 export function useInboxShortcuts(options: {
   onCompose?: () => void;
   onRefresh?: () => void;
@@ -89,6 +91,83 @@ export function useInboxShortcuts(options: {
     enabled = true,
   } = options;
 
+  // Track "g" key for two-key sequences (g+i, g+s, g+t, g+a)
+  const [gPressed, setGPressed] = useState(false);
+  const gTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Handle two-key sequences
+  useEffect(() => {
+    if (!enabled) return;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement;
+      if (
+        target.tagName === "INPUT" ||
+        target.tagName === "TEXTAREA" ||
+        target.isContentEditable
+      ) {
+        if (event.key === "Escape") {
+          target.blur();
+        }
+        return;
+      }
+
+      const key = event.key.toLowerCase();
+
+      // Handle "g" prefix for navigation
+      if (gPressed) {
+        // Clear the timeout
+        if (gTimeoutRef.current) {
+          clearTimeout(gTimeoutRef.current);
+          gTimeoutRef.current = null;
+        }
+        setGPressed(false);
+
+        switch (key) {
+          case "i":
+            event.preventDefault();
+            router.push("/inbox");
+            return;
+          case "s":
+            event.preventDefault();
+            router.push("/sent");
+            return;
+          case "t":
+            event.preventDefault();
+            router.push("/trash");
+            return;
+          case "a":
+            event.preventDefault();
+            router.push("/archived");
+            return;
+          case "*":
+            event.preventDefault();
+            router.push("/starred");
+            return;
+        }
+      }
+
+      // Start "g" sequence
+      if (key === "g" && !event.ctrlKey && !event.metaKey && !event.shiftKey) {
+        event.preventDefault();
+        setGPressed(true);
+        // Auto-cancel after 1 second
+        gTimeoutRef.current = setTimeout(() => {
+          setGPressed(false);
+        }, 1000);
+        return;
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      if (gTimeoutRef.current) {
+        clearTimeout(gTimeoutRef.current);
+      }
+    };
+  }, [enabled, gPressed, router]);
+
   const shortcuts: Shortcut[] = [
     {
       key: "c",
@@ -105,7 +184,9 @@ export function useInboxShortcuts(options: {
       description: "Focus search",
       action: () => {
         onSearch?.();
-        const searchInput = document.querySelector('input[placeholder*="Search"]') as HTMLInputElement;
+        const searchInput = document.querySelector(
+          'input[placeholder*="Search"]'
+        ) as HTMLInputElement;
         searchInput?.focus();
       },
     },
@@ -145,7 +226,6 @@ export function useInboxShortcuts(options: {
       shift: true,
       description: "Show keyboard shortcuts",
       action: () => {
-        // Will be handled by the shortcuts modal
         document.dispatchEvent(new CustomEvent("show-shortcuts-modal"));
       },
     },
@@ -153,13 +233,8 @@ export function useInboxShortcuts(options: {
       key: "Escape",
       description: "Close modal / Go back",
       action: () => {
-        // Will be handled by individual components
+        // Handled by individual components
       },
-    },
-    {
-      key: "g",
-      description: "Go to inbox (press twice)",
-      action: () => router.push("/inbox"),
     },
   ];
 
@@ -174,7 +249,9 @@ export const SHORTCUT_GROUPS = [
     name: "Navigation",
     shortcuts: [
       { keys: ["g", "i"], description: "Go to Inbox" },
-      { keys: ["g", "s"], description: "Go to Starred" },
+      { keys: ["g", "s"], description: "Go to Sent" },
+      { keys: ["g", "*"], description: "Go to Starred" },
+      { keys: ["g", "a"], description: "Go to Archive" },
       { keys: ["g", "t"], description: "Go to Trash" },
       { keys: ["j"], description: "Next conversation" },
       { keys: ["k"], description: "Previous conversation" },

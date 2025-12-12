@@ -1,26 +1,128 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef, Suspense } from "react";
+import { useState, useEffect, useCallback, Suspense } from "react";
+import { useRouter } from "next/navigation";
 import { Header } from "@/components/layout/Header";
-import { ThreadList } from "@/components/email/ThreadList";
+import { useSSE } from "@/lib/hooks/useSSE";
+import { Star, ArchiveRestore, Trash2, Archive } from "lucide-react";
+import { cn } from "@/lib/utils/cn";
+import { Avatar } from "@/components/ui/Avatar";
+import { formatEmailDate, truncate, extractNameFromEmail } from "@/lib/utils/format";
+import Link from "next/link";
 import type { Thread, Label } from "@/lib/db/schema";
 
 interface ThreadWithLabels extends Thread {
   labels: (Label & { appliedBy?: string | null; confidence?: number | null })[];
 }
 
+// Custom thread item for archived with restore action
+function ArchivedThreadItem({
+  thread,
+  onStar,
+  onRestore,
+  onTrash,
+}: {
+  thread: ThreadWithLabels;
+  onStar: () => void;
+  onRestore: () => void;
+  onTrash: () => void;
+}) {
+  const participants = (thread.participantAddresses || []).slice(0, 3);
+  const participantNames = participants.map(extractNameFromEmail).join(", ");
+
+  const handleAction = (e: React.MouseEvent, action: () => void) => {
+    e.preventDefault();
+    e.stopPropagation();
+    action();
+  };
+
+  return (
+    <Link
+      href={`/inbox/${thread.id}`}
+      className={cn(
+        "block px-4 py-3 border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors group",
+        !thread.isRead && "bg-blue-50/50 dark:bg-blue-900/10"
+      )}
+    >
+      <div className="flex items-start gap-3">
+        <Avatar email={participants[0]} size="md" className="mt-0.5" />
+
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center justify-between gap-2">
+            <span
+              className={cn(
+                "text-sm truncate",
+                !thread.isRead
+                  ? "font-semibold text-gray-900 dark:text-gray-100"
+                  : "text-gray-700 dark:text-gray-300"
+              )}
+            >
+              {participantNames || "Unknown"}
+            </span>
+            <span className="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">
+              {formatEmailDate(thread.lastMessageAt)}
+            </span>
+          </div>
+
+          <p
+            className={cn(
+              "text-sm truncate mt-0.5",
+              !thread.isRead
+                ? "font-medium text-gray-900 dark:text-gray-100"
+                : "text-gray-600 dark:text-gray-400"
+            )}
+          >
+            {thread.subject || "(No subject)"}
+          </p>
+
+          <p className="text-sm text-gray-500 dark:text-gray-400 truncate mt-0.5">
+            {truncate(thread.snippet || "", 100)}
+          </p>
+        </div>
+
+        {/* Quick Actions */}
+        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+          <button
+            onClick={(e) => handleAction(e, onStar)}
+            className="p-1.5 text-gray-400 hover:text-yellow-500 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+            title={thread.isStarred ? "Unstar" : "Star"}
+          >
+            <Star
+              className={cn(
+                "h-4 w-4",
+                thread.isStarred && "fill-yellow-500 text-yellow-500"
+              )}
+            />
+          </button>
+          <button
+            onClick={(e) => handleAction(e, onRestore)}
+            className="p-1.5 text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+            title="Move to Inbox"
+          >
+            <ArchiveRestore className="h-4 w-4" />
+          </button>
+          <button
+            onClick={(e) => handleAction(e, onTrash)}
+            className="p-1.5 text-gray-400 hover:text-red-500 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+            title="Move to Trash"
+          >
+            <Trash2 className="h-4 w-4" />
+          </button>
+        </div>
+      </div>
+    </Link>
+  );
+}
+
 function ArchivedContent() {
+  const router = useRouter();
   const [threads, setThreads] = useState<ThreadWithLabels[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [selectedIndex, setSelectedIndex] = useState(-1);
-  const threadRefs = useRef<(HTMLDivElement | null)[]>([]);
 
   const fetchThreads = useCallback(async () => {
     try {
-      const params = new URLSearchParams();
-      params.set("archived", "true");
-      const res = await fetch(`/api/threads?${params.toString()}`);
+      const res = await fetch("/api/threads?filter=archived");
       const data = await res.json();
       setThreads(data.threads || []);
     } catch (error) {
@@ -35,30 +137,110 @@ function ArchivedContent() {
     fetchThreads();
   }, [fetchThreads]);
 
+  // SSE refresh when threads are updated
+  useSSE((event) => {
+    if (event.type === "thread_updated" || event.type === "new_email") {
+      fetchThreads();
+    }
+  });
+
   const handleRefresh = () => {
     setIsRefreshing(true);
     fetchThreads();
   };
 
+  const handleStarThread = async (threadId: string) => {
+    const thread = threads.find((t) => t.id === threadId);
+    if (!thread) return;
+
+    try {
+      await fetch(`/api/threads/${threadId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ isStarred: !thread.isStarred }),
+      });
+      setThreads((prev) =>
+        prev.map((t) =>
+          t.id === threadId ? { ...t, isStarred: !t.isStarred } : t
+        )
+      );
+    } catch (error) {
+      console.error("Failed to star thread:", error);
+    }
+  };
+
+  const handleRestoreThread = async (threadId: string) => {
+    try {
+      await fetch(`/api/threads/${threadId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ isArchived: false }),
+      });
+      setThreads((prev) => prev.filter((t) => t.id !== threadId));
+      router.refresh();
+    } catch (error) {
+      console.error("Failed to restore thread:", error);
+    }
+  };
+
+  const handleTrashThread = async (threadId: string) => {
+    try {
+      await fetch(`/api/threads/${threadId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ isTrashed: true, isArchived: false }),
+      });
+      setThreads((prev) => prev.filter((t) => t.id !== threadId));
+      router.refresh();
+    } catch (error) {
+      console.error("Failed to trash thread:", error);
+    }
+  };
+
   return (
     <div className="h-full flex flex-col">
       <Header
-        title="Archived"
+        title="Archive"
         showSearch={true}
         onRefresh={handleRefresh}
         isRefreshing={isRefreshing}
       />
       <div className="flex-1 overflow-y-auto">
-        <ThreadList
-          threads={threads}
-          isLoading={isLoading || isRefreshing}
-          selectedIndex={selectedIndex}
-          onSelectIndex={setSelectedIndex}
-          threadRefs={threadRefs}
-          onStarThread={() => {}}
-          onArchiveThread={() => {}}
-          onTrashThread={() => {}}
-        />
+        {isLoading || isRefreshing ? (
+          <div className="divide-y divide-gray-100 dark:divide-gray-800">
+            {[...Array(5)].map((_, i) => (
+              <div key={i} className="px-4 py-4 animate-pulse">
+                <div className="flex items-start gap-3">
+                  <div className="h-10 w-10 rounded-full bg-gray-200 dark:bg-gray-700" />
+                  <div className="flex-1 space-y-2">
+                    <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-1/3" />
+                    <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-2/3" />
+                    <div className="h-3 bg-gray-200 dark:bg-gray-700 rounded w-full" />
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : threads.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-16 px-4 text-center">
+            <div className="h-16 w-16 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center mb-4">
+              <Archive className="h-8 w-8 text-gray-400" />
+            </div>
+            <p className="text-gray-500 dark:text-gray-400">No archived emails</p>
+          </div>
+        ) : (
+          <div className="divide-y divide-gray-100 dark:divide-gray-800">
+            {threads.map((thread) => (
+              <ArchivedThreadItem
+                key={thread.id}
+                thread={thread}
+                onStar={() => handleStarThread(thread.id)}
+                onRestore={() => handleRestoreThread(thread.id)}
+                onTrash={() => handleTrashThread(thread.id)}
+              />
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -66,11 +248,13 @@ function ArchivedContent() {
 
 export default function ArchivedPage() {
   return (
-    <Suspense fallback={
-      <div className="h-full flex items-center justify-center">
-        <div className="animate-spin h-8 w-8 border-4 border-blue-500 border-t-transparent rounded-full" />
-      </div>
-    }>
+    <Suspense
+      fallback={
+        <div className="h-full flex items-center justify-center">
+          <div className="animate-spin h-8 w-8 border-4 border-blue-500 border-t-transparent rounded-full" />
+        </div>
+      }
+    >
       <ArchivedContent />
     </Suspense>
   );

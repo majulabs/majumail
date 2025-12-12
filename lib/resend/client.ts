@@ -19,7 +19,9 @@ interface SendEmailResult {
   id: string;
 }
 
-export async function sendEmail(params: SendEmailParams): Promise<SendEmailResult> {
+export async function sendEmail(
+  params: SendEmailParams
+): Promise<SendEmailResult> {
   const { from, to, cc, bcc, subject, text, html, replyTo, headers } = params;
 
   const result = await resend.emails.send({
@@ -47,7 +49,9 @@ export async function verifyWebhookSignature(
 ): Promise<boolean> {
   const webhookSecret = process.env.RESEND_WEBHOOK_SECRET;
   if (!webhookSecret) {
-    console.warn("RESEND_WEBHOOK_SECRET not set, skipping signature verification");
+    console.warn(
+      "RESEND_WEBHOOK_SECRET not set, skipping signature verification"
+    );
     // In production, you should return false if no secret is set
     return process.env.NODE_ENV === "development";
   }
@@ -65,48 +69,43 @@ export async function verifyWebhookSignature(
 // Fetch full email details from Resend API
 // For inbound (received) emails, we need to use the /emails/receiving/:id endpoint
 // For outbound emails, we use the /emails/:id endpoint
-export async function getEmailDetails(emailId: string, isReceived: boolean = true): Promise<{
+export async function getEmailDetails(
+  emailId: string,
+  isReceived: boolean = true
+): Promise<{
   text?: string;
   html?: string;
 } | null> {
   try {
-    console.log(`Fetching email details for: ${emailId} (received: ${isReceived})`);
-    
     // Use the correct endpoint based on email type
     // Received emails use: /emails/receiving/:id
     // Sent emails use: /emails/:id
-    const endpoint = isReceived 
+    const endpoint = isReceived
       ? `https://api.resend.com/emails/receiving/${emailId}`
       : `https://api.resend.com/emails/${emailId}`;
-    
-    console.log(`Using endpoint: ${endpoint}`);
-    
+
     const response = await fetch(endpoint, {
       headers: {
         Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
       },
     });
 
-    console.log(`Resend API response status: ${response.status}`);
-
     if (!response.ok) {
       const errorText = await response.text();
-      console.error(`Failed to fetch email ${emailId}: ${response.status} - ${errorText}`);
+      console.error(
+        `Failed to fetch email ${emailId}: ${response.status} - ${errorText}`
+      );
       return null;
     }
 
     const data = await response.json();
-    console.log(`Resend API response keys: ${Object.keys(data).join(", ")}`);
-    console.log(`Has text: ${!!data.text}, Has html: ${!!data.html}`);
-    
+
     return {
-      text: data.text || data.body?.text,
-      html: data.html || data.body?.html,
+      text: data.text,
+      html: data.html,
     };
   } catch (error) {
     console.error(`Error fetching email ${emailId}:`, error);
     return null;
   }
 }
-
-export { resend };

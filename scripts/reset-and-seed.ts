@@ -1,6 +1,47 @@
 import "dotenv/config";
 import { db } from "../lib/db";
-import { mailboxes, labels, aiContext, aiLabelRules } from "../lib/db/schema";
+import { sql } from "drizzle-orm";
+import {
+  mailboxes,
+  labels,
+  aiContext,
+  aiLabelRules,
+  threads,
+  emails,
+  threadLabels,
+  contacts,
+} from "../lib/db/schema";
+
+async function reset() {
+  console.log("🗑️  Resetting database...");
+
+  // Delete in correct order to respect foreign key constraints
+  console.log("  Deleting thread labels...");
+  await db.delete(threadLabels);
+
+  console.log("  Deleting emails...");
+  await db.delete(emails);
+
+  console.log("  Deleting threads...");
+  await db.delete(threads);
+
+  console.log("  Deleting AI label rules...");
+  await db.delete(aiLabelRules);
+
+  console.log("  Deleting labels...");
+  await db.delete(labels);
+
+  console.log("  Deleting mailboxes...");
+  await db.delete(mailboxes);
+
+  console.log("  Deleting contacts...");
+  await db.delete(contacts);
+
+  console.log("  Deleting AI context...");
+  await db.delete(aiContext);
+
+  console.log("✅ Database reset complete!\n");
+}
 
 async function seed() {
   console.log("🌱 Starting seed...");
@@ -18,7 +59,7 @@ async function seed() {
     .onConflictDoNothing();
 
   // System labels
-  console.log("🏷️ Creating system labels...");
+  console.log("🏷️  Creating system labels...");
   await db
     .insert(labels)
     .values([
@@ -131,9 +172,14 @@ Enterprise pricing available for high-volume customers.`,
   console.log("✅ Seed completed!");
 }
 
-seed()
+async function main() {
+  await reset();
+  await seed();
+}
+
+main()
   .then(() => process.exit(0))
   .catch((error) => {
-    console.error("❌ Seed failed:", error);
+    console.error("❌ Reset/Seed failed:", error);
     process.exit(1);
   });

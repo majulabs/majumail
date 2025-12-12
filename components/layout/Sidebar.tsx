@@ -7,10 +7,14 @@ import { cn } from "@/lib/utils/cn";
 import { Button } from "@/components/ui/Button";
 import { Avatar } from "@/components/ui/Avatar";
 import { LabelList } from "@/components/labels/LabelList";
-import { Dropdown, DropdownItem, DropdownDivider } from "@/components/ui/Dropdown";
+import {
+  Dropdown,
+  DropdownItem,
+  DropdownDivider,
+} from "@/components/ui/Dropdown";
+import { useSSE } from "@/lib/hooks/useSSE";
 import type { Label } from "@/lib/db/schema";
-import { useState, useEffect } from "react";
-import { useSidebarSSERefresh } from "@/components/hooks/useSidebarSSERefresh";
+import { useState, useEffect, useCallback } from "react";
 
 interface LabelWithCount extends Label {
   threadCount: number;
@@ -26,21 +30,40 @@ export function Sidebar({ className }: SidebarProps) {
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [labels, setLabels] = useState<LabelWithCount[]>([]);
   const [inboxUnreadCount, setInboxUnreadCount] = useState(0);
+  const [isLoading, setIsLoading] = useState(true);
 
   // Fetch sidebar data
-  const fetchSidebarData = async () => {
-    const res = await fetch("/api/sidebar-data");
-    const data = await res.json();
-    setLabels(data.labels || []);
-    setInboxUnreadCount(data.inboxUnreadCount || 0);
-  };
+  const fetchSidebarData = useCallback(async () => {
+    try {
+      const res = await fetch("/api/sidebar-data");
+      if (!res.ok) {
+        throw new Error("Failed to fetch sidebar data");
+      }
+      const data = await res.json();
+      setLabels(data.labels || []);
+      setInboxUnreadCount(data.inboxUnreadCount || 0);
+    } catch (error) {
+      console.error("Failed to fetch sidebar data:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
     fetchSidebarData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [fetchSidebarData]);
 
-  useSidebarSSERefresh(fetchSidebarData);
+  // SSE refresh when new email arrives
+  useSSE((event) => {
+    if (event.type === "new_email") {
+      fetchSidebarData();
+    }
+  });
+
+  // Close mobile menu when navigating
+  const handleNavigation = () => {
+    setIsMobileOpen(false);
+  };
 
   return (
     <>
@@ -48,6 +71,7 @@ export function Sidebar({ className }: SidebarProps) {
       <button
         onClick={() => setIsMobileOpen(true)}
         className="lg:hidden fixed top-4 left-4 z-40 p-2 bg-white dark:bg-gray-900 rounded-lg shadow-md"
+        aria-label="Open menu"
       >
         <Menu className="h-5 w-5" />
       </button>
@@ -64,14 +88,20 @@ export function Sidebar({ className }: SidebarProps) {
       <aside
         className={cn(
           "fixed lg:static inset-y-0 left-0 z-50 w-64 bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 flex flex-col transform transition-transform lg:transform-none",
-          isMobileOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0",
+          isMobileOpen
+            ? "translate-x-0"
+            : "-translate-x-full lg:translate-x-0",
           className
         )}
       >
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-4 border-b border-gray-200 dark:border-gray-800">
-          <Link href="/inbox" className="flex items-center gap-2">
-            <div className="h-8 w-8 bg-linear-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center text-white font-bold text-sm">
+          <Link
+            href="/inbox"
+            className="flex items-center gap-2"
+            onClick={handleNavigation}
+          >
+            <div className="h-8 w-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center text-white font-bold text-sm">
               M
             </div>
             <span className="font-semibold text-gray-900 dark:text-gray-100">
@@ -81,6 +111,7 @@ export function Sidebar({ className }: SidebarProps) {
           <button
             onClick={() => setIsMobileOpen(false)}
             className="lg:hidden p-1 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+            aria-label="Close menu"
           >
             <X className="h-5 w-5" />
           </button>
@@ -88,7 +119,7 @@ export function Sidebar({ className }: SidebarProps) {
 
         {/* Compose Button */}
         <div className="px-4 py-4">
-          <Link href="/compose">
+          <Link href="/compose" onClick={handleNavigation}>
             <Button className="w-full">
               <PenSquare className="h-4 w-4 mr-2" />
               Compose
@@ -98,7 +129,22 @@ export function Sidebar({ className }: SidebarProps) {
 
         {/* Labels Navigation */}
         <div className="flex-1 overflow-y-auto px-2">
-          <LabelList labels={labels} inboxUnreadCount={inboxUnreadCount} />
+          {isLoading ? (
+            <div className="space-y-2 p-2">
+              {[...Array(5)].map((_, i) => (
+                <div
+                  key={i}
+                  className="h-9 bg-gray-100 dark:bg-gray-800 rounded-lg animate-pulse"
+                />
+              ))}
+            </div>
+          ) : (
+            <LabelList
+              labels={labels}
+              inboxUnreadCount={inboxUnreadCount}
+              onNavigate={handleNavigation}
+            />
+          )}
         </div>
 
         {/* User Section */}
@@ -125,8 +171,12 @@ export function Sidebar({ className }: SidebarProps) {
             align="left"
             position="top"
           >
-            <DropdownItem onClick={() => {}}>
-              <Link href="/settings" className="flex items-center gap-2">
+            <DropdownItem>
+              <Link
+                href="/settings"
+                className="flex items-center gap-2 w-full"
+                onClick={handleNavigation}
+              >
                 <Settings className="h-4 w-4" />
                 Settings
               </Link>

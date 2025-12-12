@@ -1,9 +1,10 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { Header } from "@/components/layout/Header";
 import { ThreadList } from "@/components/email/ThreadList";
+import { useSSE } from "@/lib/hooks/useSSE";
 import type { Thread, Label } from "@/lib/db/schema";
 
 interface ThreadWithLabels extends Thread {
@@ -12,8 +13,9 @@ interface ThreadWithLabels extends Thread {
 
 export default function LabelPage() {
   const params = useParams();
+  const router = useRouter();
   const labelId = params.labelId as string;
-  
+
   const [threads, setThreads] = useState<ThreadWithLabels[]>([]);
   const [labelName, setLabelName] = useState<string>("");
   const [isLoading, setIsLoading] = useState(true);
@@ -43,24 +45,64 @@ export default function LabelPage() {
     fetchThreads();
   }, [fetchThreads]);
 
+  // SSE refresh when new email arrives
+  useSSE((event) => {
+    if (event.type === "new_email" || event.type === "label_changed") {
+      fetchThreads();
+      router.refresh();
+    }
+  });
+
   const handleRefresh = () => {
     setIsRefreshing(true);
     fetchThreads();
   };
 
-  const updateThread = async (
-    threadId: string,
-    updates: Partial<Thread>
-  ) => {
+  const handleStarThread = async (threadId: string) => {
+    const thread = threads.find((t) => t.id === threadId);
+    if (!thread) return;
+
     try {
       await fetch(`/api/threads/${threadId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(updates),
+        body: JSON.stringify({ isStarred: !thread.isStarred }),
       });
-      fetchThreads();
+      setThreads((prev) =>
+        prev.map((t) =>
+          t.id === threadId ? { ...t, isStarred: !t.isStarred } : t
+        )
+      );
     } catch (error) {
-      console.error("Failed to update thread:", error);
+      console.error("Failed to star thread:", error);
+    }
+  };
+
+  const handleArchiveThread = async (threadId: string) => {
+    try {
+      await fetch(`/api/threads/${threadId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ isArchived: true }),
+      });
+      setThreads((prev) => prev.filter((t) => t.id !== threadId));
+      router.refresh();
+    } catch (error) {
+      console.error("Failed to archive thread:", error);
+    }
+  };
+
+  const handleTrashThread = async (threadId: string) => {
+    try {
+      await fetch(`/api/threads/${threadId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ isTrashed: true }),
+      });
+      setThreads((prev) => prev.filter((t) => t.id !== threadId));
+      router.refresh();
+    } catch (error) {
+      console.error("Failed to trash thread:", error);
     }
   };
 
@@ -75,14 +117,10 @@ export default function LabelPage() {
       <div className="flex-1 overflow-y-auto">
         <ThreadList
           threads={threads}
-          isLoading={isLoading}
-          onStarThread={(id) =>
-            updateThread(id, {
-              isStarred: !threads.find((t) => t.id === id)?.isStarred,
-            })
-          }
-          onArchiveThread={(id) => updateThread(id, { isArchived: true })}
-          onTrashThread={(id) => updateThread(id, { isTrashed: true })}
+          isLoading={isLoading || isRefreshing}
+          onStarThread={handleStarThread}
+          onArchiveThread={handleArchiveThread}
+          onTrashThread={handleTrashThread}
         />
       </div>
     </div>

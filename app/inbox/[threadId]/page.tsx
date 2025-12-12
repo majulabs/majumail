@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowLeft } from "lucide-react";
 import { ThreadView } from "@/components/email/ThreadView";
 import { ComposeForm } from "@/components/email/ComposeForm";
 import { Modal } from "@/components/ui/Modal";
@@ -40,7 +39,7 @@ export default function ThreadPage() {
       setThread(threadData.thread);
       setAllLabels(labelsData.labels || []);
       setMailboxes(mailboxesData.mailboxes || []);
-      
+
       // Refresh server components once to update sidebar unread counts
       if (!hasRefreshed.current) {
         hasRefreshed.current = true;
@@ -174,17 +173,6 @@ export default function ThreadPage() {
 
   return (
     <div className="h-full flex flex-col">
-      {/* Back button */}
-      <div className="px-4 py-2 border-b border-gray-200 dark:border-gray-800">
-        <button
-          onClick={() => router.push("/inbox")}
-          className="flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-200"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Back to inbox
-        </button>
-      </div>
-
       {/* Thread view */}
       <div className="flex-1 overflow-hidden">
         <ThreadView
@@ -198,11 +186,11 @@ export default function ThreadPage() {
           onTrash={async () => {
             if (thread.isTrashed) {
               await fetch(`/api/threads/${threadId}`, { method: "DELETE" });
-              router.push("/inbox?trashed=true");
+              router.push("/inbox");
               router.refresh();
             } else {
               updateThread({ isTrashed: true });
-              router.push("/inbox?trashed=true");
+              router.push("/inbox");
             }
           }}
           onAddLabel={addLabel}

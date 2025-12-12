@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth/config";
 import { db } from "@/lib/db";
 import { threads, emails, threadLabels, labels } from "@/lib/db/schema";
 import { eq, asc } from "drizzle-orm";
+import { broadcastSSE } from "@/app/api/sse/route";
 
 export async function GET(
   request: NextRequest,
@@ -109,6 +110,9 @@ export async function PATCH(
       return NextResponse.json({ error: "Thread not found" }, { status: 404 });
     }
 
+    // Broadcast SSE event so other pages can update
+    broadcastSSE({ type: "thread_updated", data: { threadId: id } });
+
     return NextResponse.json({ thread: updated });
   } catch (error) {
     console.error("Update thread error:", error);
@@ -132,7 +136,29 @@ export async function DELETE(
   const { id } = await params;
 
   try {
+    // First check if thread exists
+    const [thread] = await db
+      .select()
+      .from(threads)
+      .where(eq(threads.id, id))
+      .limit(1);
+
+    if (!thread) {
+      return NextResponse.json({ error: "Thread not found" }, { status: 404 });
+    }
+
+    // Delete in correct order to respect foreign key constraints
+    // 1. Delete thread labels
+    await db.delete(threadLabels).where(eq(threadLabels.threadId, id));
+    
+    // 2. Delete emails
+    await db.delete(emails).where(eq(emails.threadId, id));
+    
+    // 3. Delete thread
     await db.delete(threads).where(eq(threads.id, id));
+
+    // Broadcast SSE event
+    broadcastSSE({ type: "thread_updated", data: { threadId: id } });
 
     return NextResponse.json({ success: true });
   } catch (error) {
