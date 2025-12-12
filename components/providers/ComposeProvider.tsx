@@ -87,8 +87,18 @@ export function ComposeProvider({ children }: ComposeProviderProps) {
         <ComposeForm
           isOpen={isOpen}
           onClose={closeCompose}
-          replyTo={replyTo}
-          mailboxes={mailboxes}
+          replyTo={replyTo ? {
+            threadId: replyTo.threadId,
+            to: replyTo.toAddress, // map to expected prop
+            subject: replyTo.subject,
+            inReplyTo: undefined,
+            references: undefined,
+          } : undefined}
+          mailboxes={mailboxes.map((m) => ({
+            ...m,
+            isShared: null,
+            createdAt: null,
+          }))}
         />
       )}
     </ComposeContext.Provider>
