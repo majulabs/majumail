@@ -155,7 +155,7 @@ export function ComposeForm({
         const formData = new FormData();
         formData.append("file", file);
 
-        const res = await fetch("/api/attachments/upload", {
+        const res = await fetch("/api/attachments", {
           method: "POST",
           body: formData,
         });
@@ -170,7 +170,7 @@ export function ComposeForm({
         setAttachments((prev) =>
           prev.map((a) =>
             a.id === uploadId
-              ? { ...a, status: "done", attachmentId: data.attachmentId }
+              ? { ...a, status: "done", attachmentId: data.attachment.id }
               : a
           )
         );
