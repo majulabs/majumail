@@ -28,7 +28,7 @@ interface SidebarProps {
 }
 
 export function Sidebar({ className }: SidebarProps) {
-  const { data: session } = useSession();
+  const { data: session, status } = useSession();
   const pathname = usePathname();
   const { openCompose } = useCompose();
   const [isMobileOpen, setIsMobileOpen] = useState(false);
@@ -36,8 +36,14 @@ export function Sidebar({ className }: SidebarProps) {
   const [inboxUnreadCount, setInboxUnreadCount] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Fetch sidebar data
+  // Fetch sidebar data - only when authenticated
   const fetchSidebarData = useCallback(async () => {
+    // Don't fetch if not authenticated
+    if (status !== "authenticated" || !session?.user) {
+      setIsLoading(false);
+      return;
+    }
+
     try {
       const res = await fetch("/api/sidebar-data");
       if (!res.ok) {
@@ -51,18 +57,26 @@ export function Sidebar({ className }: SidebarProps) {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [session?.user, status]);
 
   useEffect(() => {
-    fetchSidebarData();
-  }, [fetchSidebarData]);
-
-  // SSE refresh when new email arrives
-  useSSE((event) => {
-    if (event.type === "new_email") {
+    // Only fetch when authenticated
+    if (status === "authenticated") {
       fetchSidebarData();
+    } else if (status === "unauthenticated") {
+      setIsLoading(false);
     }
-  });
+  }, [fetchSidebarData, status]);
+
+  // SSE refresh when new email arrives - only when authenticated
+  useSSE(
+    (event) => {
+      if (event.type === "new_email") {
+        fetchSidebarData();
+      }
+    },
+    status === "authenticated" // Only enable SSE when authenticated
+  );
 
   // Close mobile menu when navigating
   const handleNavigation = () => {
@@ -74,6 +88,11 @@ export function Sidebar({ className }: SidebarProps) {
     openCompose();
     setIsMobileOpen(false);
   };
+
+  // Don't render anything if not authenticated or still loading auth
+  if (status === "loading" || status === "unauthenticated" || !session?.user) {
+    return null;
+  }
 
   return (
     <>

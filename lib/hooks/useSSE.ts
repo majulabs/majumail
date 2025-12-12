@@ -13,7 +13,7 @@ export interface SSEEvent {
   };
 }
 
-export function useSSE(onEvent: (event: SSEEvent) => void) {
+export function useSSE(onEvent: (event: SSEEvent) => void, enabled: boolean = true) {
   const onEventRef = useRef(onEvent);
   
   // Update ref when callback changes
@@ -22,6 +22,11 @@ export function useSSE(onEvent: (event: SSEEvent) => void) {
   }, [onEvent]);
 
   useEffect(() => {
+    // Don't connect if disabled
+    if (!enabled) {
+      return;
+    }
+
     let eventSource: EventSource | null = null;
     let reconnectTimeout: NodeJS.Timeout | null = null;
     let reconnectAttempts = 0;
@@ -72,5 +77,5 @@ export function useSSE(onEvent: (event: SSEEvent) => void) {
       }
       eventSource?.close();
     };
-  }, []);
+  }, [enabled]);
 }
