@@ -3,7 +3,7 @@ import { auth } from "@/lib/auth/config";
 import { db } from "@/lib/db";
 import { threadLabels, labels } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
-import { broadcastSSE } from "@/lib/sse";
+import { broadcastSSE } from "@/app/api/sse/route";
 
 export async function DELETE(
   request: NextRequest,

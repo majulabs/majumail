@@ -261,7 +261,7 @@ function TrashContent() {
       {threads.length > 0 && (
         <div className="px-4 py-2 border-b border-gray-100 dark:border-gray-800 flex justify-end">
           <Button
-            variant="outline"
+            variant="ghost"
             size="sm"
             onClick={handleEmptyTrash}
             className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:text-red-300 dark:hover:bg-red-900/20"

@@ -166,12 +166,11 @@ async function seed() {
 
   // AI Context
   console.log("📚 Creating AI context...");
-  await db
-    .insert(aiContext)
-    .values([
-      {
-        title: "Company Information",
-        content: `RechnungsAPI is a German fintech startup founded by Marcel and Julien. We provide invoice generation and management APIs for businesses. Our main product is a REST API that allows companies to create, send, and track invoices programmatically.
+  const aiContextEntries = [
+    {
+      key: "company-info",
+      title: "Company Information",
+      content: `RechnungsAPI is a German fintech startup founded by Marcel and Julien. We provide invoice generation and management APIs for businesses. Our main product is a REST API that allows companies to create, send, and track invoices programmatically.
 
 Key facts:
 - Founded in 2023
@@ -179,24 +178,26 @@ Key facts:
 - Main language: German and English
 - Target audience: Developers and businesses needing invoice automation
 - Pricing: Freemium with paid tiers`,
-        category: "company",
-        isActive: true,
-      },
-      {
-        title: "Tone and Style",
-        content: `Communication style for RechnungsAPI:
+      category: "company",
+      isActive: true,
+    },
+    {
+      key: "tone-style",
+      title: "Tone and Style",
+      content: `Communication style for RechnungsAPI:
 - Professional but friendly
 - Technical when needed, but accessible
 - Helpful and solution-oriented
 - Bilingual: German preferred, English when appropriate
 - Concise but thorough
 - Always sign off as the sender (Marcel or Julien)`,
-        category: "style",
-        isActive: true,
-      },
-      {
-        title: "Common Responses",
-        content: `Frequently needed information:
+      category: "style",
+      isActive: true,
+    },
+    {
+      key: "common-responses",
+      title: "Common Responses",
+      content: `Frequently needed information:
 
 API Documentation: https://docs.rechnungs-api.de
 Pricing: https://rechnungs-api.de/pricing
@@ -205,21 +206,23 @@ Status Page: https://status.rechnungs-api.de
 
 Standard response time: Within 24 hours
 Business hours: Monday-Friday, 9:00-18:00 CET`,
-        category: "responses",
-        isActive: true,
-      },
-    ])
-    .onConflictDoNothing();
+      category: "responses",
+      isActive: true,
+    },
+  ];
+  for (const entry of aiContextEntries) {
+    await db.insert(aiContext).values(entry).onConflictDoNothing();
+  }
 
   // Sample contacts
   console.log("👥 Creating sample contacts...");
-  await db
-    .insert(contacts)
-    .values([
-      { email: "customer@example.com", name: "Sample Customer", company: "Example Corp" },
-      { email: "partner@business.de", name: "Business Partner", company: "Partner GmbH" },
-    ])
-    .onConflictDoNothing();
+  const contactEntries = [
+    { email: "customer@example.com", name: "Sample Customer", company: "Example Corp" },
+    { email: "partner@business.de", name: "Business Partner", company: "Partner GmbH" },
+  ];
+  for (const entry of contactEntries) {
+    await db.insert(contacts).values(entry).onConflictDoNothing();
+  }
 
   console.log("\n✅ Seed complete!");
   console.log("   - 4 mailboxes created");
