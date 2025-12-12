@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Header } from "@/components/layout/Header";
 import { Button } from "@/components/ui/Button";
 import { useSSE } from "@/lib/hooks/useSSE";
-import { Star, ArchiveRestore, Trash2 } from "lucide-react";
+import { Star, Inbox, Trash2, ShieldAlert } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { Avatar } from "@/components/ui/Avatar";
 import { formatEmailDate, truncate, extractNameFromEmail } from "@/lib/utils/format";
@@ -16,17 +16,17 @@ interface ThreadWithLabels extends Thread {
   labels: (Label & { appliedBy?: string | null; confidence?: number | null })[];
 }
 
-// Custom thread item for trash with restore/delete actions
-function TrashThreadItem({
+// Custom thread item for spam with actions
+function SpamThreadItem({
   thread,
   onStar,
-  onRestore,
-  onDeletePermanently,
+  onNotSpam,
+  onDelete,
 }: {
   thread: ThreadWithLabels;
   onStar: () => void;
-  onRestore: () => void;
-  onDeletePermanently: () => void;
+  onNotSpam: () => void;
+  onDelete: () => void;
 }) {
   const participants = (thread.participantAddresses || []).slice(0, 3);
   const participantNames = participants.map(extractNameFromEmail).join(", ");
@@ -67,7 +67,7 @@ function TrashThreadItem({
 
           <p
             className={cn(
-              "text-sm truncate mt-0.5",
+              "text-sm truncate mt.0.5",
               !thread.isRead
                 ? "font-medium text-gray-900 dark:text-gray-100"
                 : "text-gray-600 dark:text-gray-400"
@@ -96,14 +96,14 @@ function TrashThreadItem({
             />
           </button>
           <button
-            onClick={(e) => handleAction(e, onRestore)}
-            className="p-1.5 text-gray-400 hover:text-green-600 dark:hover:text-green-400 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-            title="Restore to Inbox"
+            onClick={(e) => handleAction(e, onNotSpam)}
+            className="p-1.5 text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+            title="Not Spam - Move to Inbox"
           >
-            <ArchiveRestore className="h-4 w-4" />
+            <Inbox className="h-4 w-4" />
           </button>
           <button
-            onClick={(e) => handleAction(e, onDeletePermanently)}
+            onClick={(e) => handleAction(e, onDelete)}
             className="p-1.5 text-gray-400 hover:text-red-500 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
             title="Delete permanently"
           >
@@ -115,7 +115,7 @@ function TrashThreadItem({
   );
 }
 
-function TrashContent() {
+function SpamContent() {
   const router = useRouter();
   const [threads, setThreads] = useState<ThreadWithLabels[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -126,11 +126,11 @@ function TrashContent() {
 
   const fetchThreads = useCallback(async () => {
     try {
-      const res = await fetch("/api/threads?filter=trash");
+      const res = await fetch("/api/threads?filter=spam");
       const data = await res.json();
       setThreads(data.threads || []);
     } catch (error) {
-      console.error("Failed to fetch trashed threads:", error);
+      console.error("Failed to fetch spam threads:", error);
     } finally {
       setIsLoading(false);
       setIsRefreshing(false);
@@ -161,19 +161,22 @@ function TrashContent() {
     fetchThreads();
   };
 
-  const handleEmptyTrash = async () => {
-    if (!confirm("Are you sure you want to permanently delete all emails in trash? This cannot be undone.")) {
+  const handleEmptySpam = async () => {
+    if (!confirm("Are you sure you want to permanently delete all spam emails? This cannot be undone.")) {
       return;
     }
 
     try {
-      await fetch("/api/threads/delete-all-trashed", {
-        method: "DELETE",
-      });
+      // Delete all spam threads
+      for (const thread of threads) {
+        await fetch(`/api/threads/${thread.id}`, {
+          method: "DELETE",
+        });
+      }
       setThreads([]);
       router.refresh();
     } catch (error) {
-      console.error("Failed to empty trash:", error);
+      console.error("Failed to empty spam:", error);
     }
   };
 
@@ -204,28 +207,28 @@ function TrashContent() {
     }
   };
 
-  const handleRestoreThread = async (threadId: string) => {
+  const handleNotSpam = async (threadId: string) => {
     // Mark as recently changed
     recentChangesRef.current.add(threadId);
     setTimeout(() => recentChangesRef.current.delete(threadId), 2000);
 
     try {
-      await fetch(`/api/threads/${threadId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ isTrashed: false }),
+      // Remove Spam label and add back to Inbox
+      await fetch(`/api/threads/${threadId}/labels/spam`, {
+        method: "DELETE",
       });
-      // Remove from trash list immediately
+      
+      // Remove from spam list immediately
       setThreads((prev) => prev.filter((t) => t.id !== threadId));
       router.refresh();
     } catch (error) {
-      console.error("Failed to restore thread:", error);
+      console.error("Failed to mark as not spam:", error);
       recentChangesRef.current.delete(threadId);
       fetchThreads();
     }
   };
 
-  const handleDeletePermanently = async (threadId: string) => {
+  const handleDelete = async (threadId: string) => {
     if (!confirm("Are you sure you want to permanently delete this email? This cannot be undone.")) {
       return;
     }
@@ -251,23 +254,23 @@ function TrashContent() {
   return (
     <div className="h-full flex flex-col">
       <Header
-        title="Trash"
+        title="Spam"
         showSearch={true}
         onRefresh={handleRefresh}
         isRefreshing={isRefreshing}
       />
       
-      {/* Empty Trash Button */}
+      {/* Empty Spam Button */}
       {threads.length > 0 && (
         <div className="px-4 py-2 border-b border-gray-100 dark:border-gray-800 flex justify-end">
           <Button
             variant="outline"
             size="sm"
-            onClick={handleEmptyTrash}
+            onClick={handleEmptySpam}
             className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:text-red-300 dark:hover:bg-red-900/20"
           >
             <Trash2 className="h-4 w-4 mr-2" />
-            Empty Trash
+            Empty Spam
           </Button>
         </div>
       )}
@@ -291,19 +294,22 @@ function TrashContent() {
         ) : threads.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 px-4 text-center">
             <div className="h-16 w-16 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center mb-4">
-              <Trash2 className="h-8 w-8 text-gray-400" />
+              <ShieldAlert className="h-8 w-8 text-gray-400" />
             </div>
-            <p className="text-gray-500 dark:text-gray-400">Trash is empty</p>
+            <p className="text-gray-500 dark:text-gray-400">No spam emails</p>
+            <p className="text-sm text-gray-400 dark:text-gray-500 mt-1">
+              Hooray! Your inbox is spam-free
+            </p>
           </div>
         ) : (
           <div className="divide-y divide-gray-100 dark:divide-gray-800">
             {threads.map((thread) => (
-              <TrashThreadItem
+              <SpamThreadItem
                 key={thread.id}
                 thread={thread}
                 onStar={() => handleStarThread(thread.id)}
-                onRestore={() => handleRestoreThread(thread.id)}
-                onDeletePermanently={() => handleDeletePermanently(thread.id)}
+                onNotSpam={() => handleNotSpam(thread.id)}
+                onDelete={() => handleDelete(thread.id)}
               />
             ))}
           </div>
@@ -313,7 +319,7 @@ function TrashContent() {
   );
 }
 
-export default function TrashPage() {
+export default function SpamPage() {
   return (
     <Suspense
       fallback={
@@ -322,7 +328,7 @@ export default function TrashPage() {
         </div>
       }
     >
-      <TrashContent />
+      <SpamContent />
     </Suspense>
   );
 }

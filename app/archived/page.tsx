@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, Suspense } from "react";
+import { useState, useEffect, useCallback, useRef, Suspense } from "react";
 import { useRouter } from "next/navigation";
 import { Header } from "@/components/layout/Header";
 import { useSSE } from "@/lib/hooks/useSSE";
@@ -119,6 +119,9 @@ function ArchivedContent() {
   const [threads, setThreads] = useState<ThreadWithLabels[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  
+  // Track recent local changes to avoid SSE overwriting them
+  const recentChangesRef = useRef<Set<string>>(new Set());
 
   const fetchThreads = useCallback(async () => {
     try {
@@ -140,12 +143,20 @@ function ArchivedContent() {
   // SSE refresh when threads are updated
   useSSE((event) => {
     if (event.type === "thread_updated" || event.type === "new_email") {
+      const threadId = event.data?.threadId;
+      
+      // Skip SSE-triggered refresh if we just made a local change to this thread
+      if (threadId && recentChangesRef.current.has(threadId)) {
+        return;
+      }
+      
       fetchThreads();
     }
   });
 
   const handleRefresh = () => {
     setIsRefreshing(true);
+    recentChangesRef.current.clear();
     fetchThreads();
   };
 
@@ -153,12 +164,17 @@ function ArchivedContent() {
     const thread = threads.find((t) => t.id === threadId);
     if (!thread) return;
 
+    // Mark as recently changed
+    recentChangesRef.current.add(threadId);
+    setTimeout(() => recentChangesRef.current.delete(threadId), 2000);
+
     try {
       await fetch(`/api/threads/${threadId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ isStarred: !thread.isStarred }),
       });
+      // Update local state
       setThreads((prev) =>
         prev.map((t) =>
           t.id === threadId ? { ...t, isStarred: !t.isStarred } : t
@@ -166,34 +182,50 @@ function ArchivedContent() {
       );
     } catch (error) {
       console.error("Failed to star thread:", error);
+      recentChangesRef.current.delete(threadId);
+      fetchThreads();
     }
   };
 
   const handleRestoreThread = async (threadId: string) => {
+    // Mark as recently changed
+    recentChangesRef.current.add(threadId);
+    setTimeout(() => recentChangesRef.current.delete(threadId), 2000);
+
     try {
       await fetch(`/api/threads/${threadId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ isArchived: false }),
       });
+      // Remove from archived list immediately
       setThreads((prev) => prev.filter((t) => t.id !== threadId));
       router.refresh();
     } catch (error) {
       console.error("Failed to restore thread:", error);
+      recentChangesRef.current.delete(threadId);
+      fetchThreads();
     }
   };
 
   const handleTrashThread = async (threadId: string) => {
+    // Mark as recently changed
+    recentChangesRef.current.add(threadId);
+    setTimeout(() => recentChangesRef.current.delete(threadId), 2000);
+
     try {
       await fetch(`/api/threads/${threadId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ isTrashed: true, isArchived: false }),
       });
+      // Remove from archived list
       setThreads((prev) => prev.filter((t) => t.id !== threadId));
       router.refresh();
     } catch (error) {
       console.error("Failed to trash thread:", error);
+      recentChangesRef.current.delete(threadId);
+      fetchThreads();
     }
   };
 

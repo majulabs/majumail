@@ -58,7 +58,7 @@ async function seed() {
     ])
     .onConflictDoNothing();
 
-  // System labels
+  // System labels - including Spam
   console.log("🏷️  Creating system labels...");
   await db
     .insert(labels)
@@ -67,119 +67,181 @@ async function seed() {
       { name: "Sent", color: "#10b981", isSystem: true, autoClassify: false, sortOrder: 1 },
       { name: "Starred", color: "#eab308", isSystem: true, autoClassify: false, sortOrder: 2 },
       { name: "Archived", color: "#6b7280", isSystem: true, autoClassify: false, sortOrder: 3 },
-      { name: "Trash", color: "#ef4444", isSystem: true, autoClassify: false, sortOrder: 4 },
-      { name: "Spam", color: "#f97316", isSystem: true, autoClassify: false, sortOrder: 5 },
+      { name: "Spam", color: "#f97316", isSystem: true, autoClassify: false, sortOrder: 4 },
+      { name: "Trash", color: "#ef4444", isSystem: true, autoClassify: false, sortOrder: 5 },
     ])
     .onConflictDoNothing();
 
-  // Custom labels
-  console.log("🎨 Creating custom labels...");
-  const customLabels = await db
+  // Custom labels for classification
+  console.log("🏷️  Creating custom labels...");
+  await db
     .insert(labels)
     .values([
-      { name: "Customer Inquiry", color: "#f59e0b", sortOrder: 10 },
-      { name: "Partnership", color: "#8b5cf6", sortOrder: 11 },
-      { name: "Technical Support", color: "#ec4899", sortOrder: 12 },
-      { name: "Billing", color: "#14b8a6", sortOrder: 13 },
+      { name: "Invoice", color: "#8b5cf6", isSystem: false, autoClassify: true, sortOrder: 10 },
+      { name: "Support", color: "#06b6d4", isSystem: false, autoClassify: true, sortOrder: 11 },
+      { name: "Partnership", color: "#ec4899", isSystem: false, autoClassify: true, sortOrder: 12 },
+      { name: "Newsletter", color: "#84cc16", isSystem: false, autoClassify: true, sortOrder: 13 },
+      { name: "Personal", color: "#f59e0b", isSystem: false, autoClassify: true, sortOrder: 14 },
     ])
-    .onConflictDoNothing()
-    .returning();
+    .onConflictDoNothing();
 
-  // AI label rules
+  // Fetch created labels for AI rules
+  const createdLabels = await db.select().from(labels);
+  const labelMap = new Map(createdLabels.map((l) => [l.name, l.id]));
+
+  // AI Label Rules
   console.log("🤖 Creating AI label rules...");
-  const customerLabel = customLabels.find((l) => l.name === "Customer Inquiry");
-  const partnerLabel = customLabels.find((l) => l.name === "Partnership");
-  const techLabel = customLabels.find((l) => l.name === "Technical Support");
-  const billingLabel = customLabels.find((l) => l.name === "Billing");
-
-  const rulesToInsert = [];
-
-  if (customerLabel) {
-    rulesToInsert.push({
-      labelId: customerLabel.id,
-      description: "General inquiries from potential customers about our service",
+  const aiRules = [
+    {
+      labelId: labelMap.get("Invoice")!,
+      description: "Invoices, bills, payment requests, receipts",
+      keywords: ["invoice", "rechnung", "payment", "bill", "receipt", "zahlung"],
       examples: [
-        "Interested in your API",
-        "How does RechnungsAPI work?",
-        "Looking for e-invoicing solution",
+        "Invoice #12345 for your subscription",
+        "Your monthly bill is ready",
+        "Payment confirmation",
+        "Rechnung für Ihre Bestellung",
       ],
-      keywords: ["interested", "inquiry", "information", "demo", "trial"],
-    });
+    },
+    {
+      labelId: labelMap.get("Support")!,
+      description: "Customer support requests, bug reports, feature requests",
+      keywords: ["help", "issue", "problem", "bug", "error", "support", "hilfe"],
+      examples: [
+        "I need help with my account",
+        "Getting an error when trying to login",
+        "Bug report: PDF generation fails",
+        "Ich brauche Hilfe bei der API",
+      ],
+    },
+    {
+      labelId: labelMap.get("Partnership")!,
+      description: "Business partnerships, collaborations, B2B inquiries",
+      keywords: ["partnership", "collaboration", "business", "cooperation", "zusammenarbeit"],
+      examples: [
+        "Partnership inquiry from Company X",
+        "Would like to discuss a collaboration",
+        "B2B pricing request",
+        "Interesse an einer Kooperation",
+      ],
+    },
+    {
+      labelId: labelMap.get("Newsletter")!,
+      description: "Marketing emails, newsletters, promotional content",
+      keywords: ["newsletter", "unsubscribe", "marketing", "promotion", "offer"],
+      examples: [
+        "Your weekly newsletter",
+        "Special offer just for you",
+        "New features announcement",
+        "Unsubscribe from this list",
+      ],
+    },
+    {
+      labelId: labelMap.get("Personal")!,
+      description: "Personal messages, greetings, non-business communication",
+      keywords: ["personal", "hello", "greetings", "thanks", "danke", "hallo"],
+      examples: [
+        "Hey, how are you doing?",
+        "Thanks for the great work!",
+        "Just wanted to say hi",
+        "Hallo, wie geht es dir?",
+      ],
+    },
+  ];
+
+  for (const rule of aiRules) {
+    if (rule.labelId) {
+      await db
+        .insert(aiLabelRules)
+        .values({
+          labelId: rule.labelId,
+          description: rule.description,
+          keywords: rule.keywords,
+          examples: rule.examples,
+          isActive: true,
+        })
+        .onConflictDoNothing();
+    }
   }
 
-  if (partnerLabel) {
-    rulesToInsert.push({
-      labelId: partnerLabel.id,
-      description: "Partnership, integration, or business collaboration proposals",
-      examples: ["Partnership opportunity", "Integration proposal", "Collaboration"],
-      keywords: ["partnership", "collaborate", "integrate", "reseller", "white-label"],
-    });
-  }
-
-  if (techLabel) {
-    rulesToInsert.push({
-      labelId: techLabel.id,
-      description: "Technical questions, bug reports, or API issues",
-      examples: ["API returning error", "Integration help needed", "Bug report"],
-      keywords: ["error", "bug", "issue", "API", "endpoint", "integration", "technical"],
-    });
-  }
-
-  if (billingLabel) {
-    rulesToInsert.push({
-      labelId: billingLabel.id,
-      description: "Billing, payment, invoice, or pricing questions",
-      examples: ["Invoice question", "Payment failed", "Pricing inquiry"],
-      keywords: ["invoice", "payment", "billing", "price", "pricing", "cost", "subscription"],
-    });
-  }
-
-  if (rulesToInsert.length > 0) {
-    await db.insert(aiLabelRules).values(rulesToInsert).onConflictDoNothing();
-  }
-
-  // AI context
+  // AI Context
   console.log("📚 Creating AI context...");
   await db
     .insert(aiContext)
     .values([
       {
-        key: "company_info",
         title: "Company Information",
-        content: `RechnungsAPI is a German e-invoicing API service (www.rechnungs-api.de). 
-We convert JSON to XRechnung and ZUGFeRD formats for compliance with German B2B e-invoicing mandates. 
-Our API is simple to integrate and handles all the complexity of German e-invoicing standards.
-Founded by Marcel and Julien, both developers with a focus on making e-invoicing simple.`,
+        content: `RechnungsAPI is a German fintech startup founded by Marcel and Julien. We provide invoice generation and management APIs for businesses. Our main product is a REST API that allows companies to create, send, and track invoices programmatically.
+
+Key facts:
+- Founded in 2023
+- Based in Germany
+- Main language: German and English
+- Target audience: Developers and businesses needing invoice automation
+- Pricing: Freemium with paid tiers`,
+        category: "company",
+        isActive: true,
       },
       {
-        key: "tone",
-        title: "Communication Tone",
-        content: `Professional but friendly. We are a small startup (two founders: Marcel and Julien) so we can be personable.
-Write in German unless the conversation is in English.
-Keep emails concise and helpful.
-Be direct but polite.`,
+        title: "Tone and Style",
+        content: `Communication style for RechnungsAPI:
+- Professional but friendly
+- Technical when needed, but accessible
+- Helpful and solution-oriented
+- Bilingual: German preferred, English when appropriate
+- Concise but thorough
+- Always sign off as the sender (Marcel or Julien)`,
+        category: "style",
+        isActive: true,
       },
       {
-        key: "pricing",
-        title: "Pricing Information",
-        content: `Contact us for pricing details. We offer flexible plans based on invoice volume.
-We have a free tier for testing and small volumes.
-Enterprise pricing available for high-volume customers.`,
+        title: "Common Responses",
+        content: `Frequently needed information:
+
+API Documentation: https://docs.rechnungs-api.de
+Pricing: https://rechnungs-api.de/pricing
+Support Email: support@mail.rechnungs-api.de
+Status Page: https://status.rechnungs-api.de
+
+Standard response time: Within 24 hours
+Business hours: Monday-Friday, 9:00-18:00 CET`,
+        category: "responses",
+        isActive: true,
       },
     ])
     .onConflictDoNothing();
 
-  console.log("✅ Seed completed!");
+  // Sample contacts
+  console.log("👥 Creating sample contacts...");
+  await db
+    .insert(contacts)
+    .values([
+      { email: "customer@example.com", name: "Sample Customer", company: "Example Corp" },
+      { email: "partner@business.de", name: "Business Partner", company: "Partner GmbH" },
+    ])
+    .onConflictDoNothing();
+
+  console.log("\n✅ Seed complete!");
+  console.log("   - 4 mailboxes created");
+  console.log("   - 11 labels created (6 system + 5 custom)");
+  console.log("   - 5 AI label rules created");
+  console.log("   - 3 AI context entries created");
+  console.log("   - 2 sample contacts created");
 }
 
 async function main() {
-  await reset();
+  const args = process.argv.slice(2);
+  const shouldReset = args.includes("--reset") || args.includes("-r");
+
+  if (shouldReset) {
+    await reset();
+  }
+
   await seed();
+  process.exit(0);
 }
 
-main()
-  .then(() => process.exit(0))
-  .catch((error) => {
-    console.error("❌ Reset/Seed failed:", error);
-    process.exit(1);
-  });
+main().catch((error) => {
+  console.error("❌ Seed failed:", error);
+  process.exit(1);
+});

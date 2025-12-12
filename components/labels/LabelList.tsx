@@ -8,6 +8,7 @@ import {
   Star,
   Archive,
   Trash2,
+  ShieldAlert,
   Tag,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
@@ -30,6 +31,7 @@ const CORE_NAV_ITEMS = [
   { name: "Sent", icon: Send, href: "/sent" },
   { name: "Starred", icon: Star, href: "/starred" },
   { name: "Archive", icon: Archive, href: "/archived" },
+  { name: "Spam", icon: ShieldAlert, href: "/spam" },
   { name: "Trash", icon: Trash2, href: "/trash" },
 ];
 
@@ -40,13 +42,21 @@ export function LabelList({
 }: LabelListProps) {
   const pathname = usePathname();
 
+  // Deduplicate labels by name (keep first occurrence)
+  const deduplicatedLabels = labels.reduce<LabelWithCount[]>((acc, label) => {
+    if (!acc.find((l) => l.name === label.name)) {
+      acc.push(label);
+    }
+    return acc;
+  }, []);
+
   // Create a map of label names to their data for quick lookup
   const labelsByName = new Map(
-    labels.filter((l) => l.isSystem).map((l) => [l.name, l])
+    deduplicatedLabels.filter((l) => l.isSystem).map((l) => [l.name, l])
   );
 
   // Get custom (non-system) labels
-  const customLabels = labels.filter((l) => !l.isSystem);
+  const customLabels = deduplicatedLabels.filter((l) => !l.isSystem);
 
   return (
     <div className="space-y-1">

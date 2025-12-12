@@ -19,6 +19,9 @@ function StarredContent() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(-1);
   const threadRefs = useRef<(HTMLDivElement | null)[]>([]);
+  
+  // Track recent local changes to avoid SSE overwriting them
+  const recentChangesRef = useRef<Set<string>>(new Set());
 
   const fetchThreads = useCallback(async () => {
     try {
@@ -40,12 +43,20 @@ function StarredContent() {
   // SSE refresh when threads are updated (including star changes from other pages)
   useSSE((event) => {
     if (event.type === "thread_updated" || event.type === "new_email") {
+      const threadId = event.data?.threadId;
+      
+      // Skip SSE-triggered refresh if we just made a local change to this thread
+      if (threadId && recentChangesRef.current.has(threadId)) {
+        return;
+      }
+      
       fetchThreads();
     }
   });
 
   const handleRefresh = () => {
     setIsRefreshing(true);
+    recentChangesRef.current.clear();
     fetchThreads();
   };
 
@@ -53,22 +64,34 @@ function StarredContent() {
     const thread = threads.find((t) => t.id === threadId);
     if (!thread) return;
 
+    // Mark this thread as recently changed to prevent SSE from overwriting
+    recentChangesRef.current.add(threadId);
+    setTimeout(() => recentChangesRef.current.delete(threadId), 2000);
+
     try {
       await fetch(`/api/threads/${threadId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ isStarred: !thread.isStarred }),
       });
-      // If unstarring, remove from the list immediately
+      
+      // When unstarring on the starred page, remove the thread from the list
       if (thread.isStarred) {
         setThreads((prev) => prev.filter((t) => t.id !== threadId));
       }
     } catch (error) {
       console.error("Failed to toggle star:", error);
+      // Revert on error by refetching
+      recentChangesRef.current.delete(threadId);
+      fetchThreads();
     }
   };
 
   const handleArchiveThread = async (threadId: string) => {
+    // Mark as recently changed
+    recentChangesRef.current.add(threadId);
+    setTimeout(() => recentChangesRef.current.delete(threadId), 2000);
+
     try {
       await fetch(`/api/threads/${threadId}`, {
         method: "PATCH",
@@ -79,10 +102,16 @@ function StarredContent() {
       router.refresh();
     } catch (error) {
       console.error("Failed to archive thread:", error);
+      recentChangesRef.current.delete(threadId);
+      fetchThreads();
     }
   };
 
   const handleTrashThread = async (threadId: string) => {
+    // Mark as recently changed
+    recentChangesRef.current.add(threadId);
+    setTimeout(() => recentChangesRef.current.delete(threadId), 2000);
+
     try {
       await fetch(`/api/threads/${threadId}`, {
         method: "PATCH",
@@ -93,6 +122,8 @@ function StarredContent() {
       router.refresh();
     } catch (error) {
       console.error("Failed to trash thread:", error);
+      recentChangesRef.current.delete(threadId);
+      fetchThreads();
     }
   };
 
