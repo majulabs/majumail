@@ -1,14 +1,35 @@
-import type { Thread, Email, Label, ThreadLabel } from "./db/schema";
+import type { 
+  Thread, 
+  Email, 
+  Label, 
+  ThreadLabel, 
+  Contact, 
+  ContactKnowledge,
+  AIKnowledge,
+  AIKnowledgePending,
+  Attachment
+} from "./db/schema";
 
 // Thread with relations
 export interface ThreadWithRelations extends Thread {
-  emails: Email[];
+  emails: EmailWithAttachments[];
   labels: (ThreadLabel & { label: Label })[];
+}
+
+// Email with attachments
+export interface EmailWithAttachments extends Email {
+  attachments?: Attachment[];
 }
 
 // Label with count
 export interface LabelWithCount extends Label {
   threadCount: number;
+  unreadCount?: number;
+}
+
+// Contact with relations
+export interface ContactWithRelations extends Contact {
+  knowledge?: ContactKnowledge[];
 }
 
 // AI Classification result
@@ -24,12 +45,53 @@ export interface ComposeRequest {
   threadId?: string;
   instruction: string;
   additionalContext?: string;
+  senderName?: string;
 }
 
 // Compose AI response
 export interface ComposeResponse {
   draft: string;
   suggestedSubject?: string;
+}
+
+// Smart Reply suggestion
+export interface SmartReplySuggestion {
+  id: string;
+  text: string;
+  type: "positive" | "negative" | "neutral" | "question";
+  preview: string;
+}
+
+// Thread Summary
+export interface ThreadSummary {
+  summary: string;
+  keyPoints: string[];
+  actionItems: string[];
+  sentiment: "positive" | "negative" | "neutral";
+  participants: {
+    email: string;
+    name?: string;
+    messageCount: number;
+  }[];
+}
+
+// Knowledge extraction result
+export interface KnowledgeExtraction {
+  category: string;
+  title: string;
+  content: string;
+  confidence: number;
+  contactId?: string;
+  field?: string;
+}
+
+// Attachment summary result
+export interface AttachmentSummary {
+  filename: string;
+  contentType: string;
+  size: number;
+  summary: string;
+  extractedText?: string;
 }
 
 // Send email request
@@ -44,10 +106,14 @@ export interface SendEmailRequest {
   replyToThreadId?: string;
   inReplyTo?: string;
   references?: string[];
+  attachments?: {
+    filename: string;
+    content: string; // Base64 encoded
+    contentType: string;
+  }[];
 }
 
 // Resend inbound webhook payload
-// Note: The webhook payload structure may vary - some fields are optional
 export interface ResendInboundPayload {
   type: "email.received" | "email.sent" | "email.delivered" | "email.bounced" | "email.complained";
   created_at?: string;
@@ -76,7 +142,7 @@ export interface ResendInboundPayload {
 }
 
 // SSE event types
-export type SSEEventType = "new_email" | "thread_updated" | "label_changed";
+export type SSEEventType = "new_email" | "thread_updated" | "label_changed" | "contact_updated";
 
 export interface SSEEvent {
   type: SSEEventType;
@@ -84,7 +150,29 @@ export interface SSEEvent {
     threadId?: string;
     emailId?: string;
     labelId?: string;
+    contactId?: string;
   };
+}
+
+// AI Settings
+export interface AISettingsConfig {
+  autoLearnFromEmails: boolean;
+  autoLearnConfidenceThreshold: number; // 0-100
+  autoCreateContacts: boolean;
+  generateThreadSummaries: boolean;
+  generateSmartReplies: boolean;
+  summarizeAttachments: boolean;
+}
+
+// Contact insights for sidebar
+export interface ContactInsights {
+  contact: Contact;
+  knowledge: ContactKnowledge[];
+  recentTopics: string[];
+  conversationCount: number;
+  relationshipScore: number; // 0-100
+  suggestedTopics: string[];
+  lastInteraction?: Date;
 }
 
 // Label colors
@@ -108,3 +196,13 @@ export const LABEL_COLORS = [
   { name: "Pink", value: "#ec4899" },
   { name: "Rose", value: "#f43f5e" },
 ] as const;
+
+// Default AI Settings
+export const DEFAULT_AI_SETTINGS: AISettingsConfig = {
+  autoLearnFromEmails: true,
+  autoLearnConfidenceThreshold: 80,
+  autoCreateContacts: true,
+  generateThreadSummaries: true,
+  generateSmartReplies: true,
+  summarizeAttachments: true,
+};

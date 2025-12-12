@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { signOut, useSession } from "next-auth/react";
-import { PenSquare, Settings, LogOut, Menu, X } from "lucide-react";
+import { PenSquare, Settings, LogOut, Menu, X, Users } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { Button } from "@/components/ui/Button";
 import { Avatar } from "@/components/ui/Avatar";
@@ -13,6 +14,7 @@ import {
   DropdownDivider,
 } from "@/components/ui/Dropdown";
 import { useSSE } from "@/lib/hooks/useSSE";
+import { useCompose } from "@/components/providers/ComposeProvider";
 import type { Label } from "@/lib/db/schema";
 import { useState, useEffect, useCallback } from "react";
 
@@ -27,6 +29,8 @@ interface SidebarProps {
 
 export function Sidebar({ className }: SidebarProps) {
   const { data: session } = useSession();
+  const pathname = usePathname();
+  const { openCompose } = useCompose();
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [labels, setLabels] = useState<LabelWithCount[]>([]);
   const [inboxUnreadCount, setInboxUnreadCount] = useState(0);
@@ -62,6 +66,12 @@ export function Sidebar({ className }: SidebarProps) {
 
   // Close mobile menu when navigating
   const handleNavigation = () => {
+    setIsMobileOpen(false);
+  };
+
+  // Handle compose button click
+  const handleComposeClick = () => {
+    openCompose();
     setIsMobileOpen(false);
   };
 
@@ -119,12 +129,10 @@ export function Sidebar({ className }: SidebarProps) {
 
         {/* Compose Button */}
         <div className="px-4 py-4">
-          <Link href="/compose" onClick={handleNavigation}>
-            <Button className="w-full">
-              <PenSquare className="h-4 w-4 mr-2" />
-              Compose
-            </Button>
-          </Link>
+          <Button className="w-full" onClick={handleComposeClick}>
+            <PenSquare className="h-4 w-4 mr-2" />
+            Compose
+          </Button>
         </div>
 
         {/* Labels Navigation */}
@@ -145,6 +153,23 @@ export function Sidebar({ className }: SidebarProps) {
               onNavigate={handleNavigation}
             />
           )}
+        </div>
+
+        {/* Bottom Navigation - Contacts */}
+        <div className="px-2 py-2 border-t border-gray-200 dark:border-gray-800">
+          <Link
+            href="/contacts"
+            onClick={handleNavigation}
+            className={cn(
+              "flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
+              pathname === "/contacts"
+                ? "bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400"
+                : "text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800"
+            )}
+          >
+            <Users className="h-5 w-5" />
+            <span>Contacts</span>
+          </Link>
         </div>
 
         {/* User Section */}

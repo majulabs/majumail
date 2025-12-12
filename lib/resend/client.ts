@@ -3,6 +3,12 @@ import { Webhook } from "svix";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
+interface Attachment {
+  filename: string;
+  content: Buffer;
+  contentType?: string;
+}
+
 interface SendEmailParams {
   from: string;
   to: string[];
@@ -13,6 +19,7 @@ interface SendEmailParams {
   html?: string;
   replyTo?: string;
   headers?: Record<string, string>;
+  attachments?: Attachment[];
 }
 
 interface SendEmailResult {
@@ -22,7 +29,13 @@ interface SendEmailResult {
 export async function sendEmail(
   params: SendEmailParams
 ): Promise<SendEmailResult> {
-  const { from, to, cc, bcc, subject, text, html, replyTo, headers } = params;
+  const { from, to, cc, bcc, subject, text, html, replyTo, headers, attachments } = params;
+
+  // Build attachments in Resend format
+  const resendAttachments = attachments?.map((att) => ({
+    filename: att.filename,
+    content: att.content,
+  }));
 
   const result = await resend.emails.send({
     from,
@@ -34,6 +47,7 @@ export async function sendEmail(
     html: html || text,
     replyTo,
     headers,
+    attachments: resendAttachments,
   });
 
   if (result.error) {

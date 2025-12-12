@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth/config";
 import { db } from "@/lib/db";
-import { threads, emails, threadLabels, labels } from "@/lib/db/schema";
-import { eq, asc } from "drizzle-orm";
+import { threads, emails, threadLabels, labels, attachments } from "@/lib/db/schema";
+import { eq, asc, inArray } from "drizzle-orm";
 import { broadcastSSE } from "@/app/api/sse/route";
 
 export async function GET(
@@ -36,6 +36,84 @@ export async function GET(
       .where(eq(emails.threadId, id))
       .orderBy(asc(emails.sentAt));
 
+    // Get attachments for all emails in this thread
+    const emailIds = threadEmails.map((e) => e.id);
+    let emailAttachments: Array<{
+      id: string;
+      emailId: string | null;
+      filename: string;
+      contentType: string;
+      size: number;
+      storageUrl: string | null;
+      summary: string | null;
+    }> = [];
+
+    if (emailIds.length > 0) {
+      emailAttachments = await db
+        .select({
+          id: attachments.id,
+          emailId: attachments.emailId,
+          filename: attachments.filename,
+          contentType: attachments.contentType,
+          size: attachments.size,
+          storageUrl: attachments.storageUrl,
+          summary: attachments.summary,
+        })
+        .from(attachments)
+        .where(inArray(attachments.emailId, emailIds));
+    }
+
+    // Group attachments by email ID
+    const attachmentsByEmailId = emailAttachments.reduce(
+      (acc, att) => {
+        if (att.emailId) {
+          if (!acc[att.emailId]) {
+            acc[att.emailId] = [];
+          }
+          acc[att.emailId].push(att);
+        }
+        return acc;
+      },
+      {} as Record<string, typeof emailAttachments>
+    );
+
+    // Merge attachments into emails
+    const emailsWithAttachments = threadEmails.map((email) => {
+      // Get attachments from our attachments table
+      const dbAttachments = attachmentsByEmailId[email.id] || [];
+      
+      // Also check the email's built-in attachments field (for inbound emails)
+      const inlineAttachments = (email.attachments as Array<{
+        filename: string;
+        content_type?: string;
+        contentType?: string;
+      }>) || [];
+
+      // Combine both sources, preferring db attachments
+      const allAttachments = dbAttachments.length > 0
+        ? dbAttachments.map((a) => ({
+            id: a.id,
+            filename: a.filename,
+            contentType: a.contentType,
+            size: a.size,
+            storageUrl: a.storageUrl,
+            summary: a.summary,
+          }))
+        : inlineAttachments.map((a, index) => ({
+            id: `inline-${index}`,
+            filename: a.filename,
+            contentType: a.content_type || a.contentType || "application/octet-stream",
+            size: 0,
+            storageUrl: null,
+            summary: null,
+          }));
+
+      return {
+        ...email,
+        attachments: allAttachments,
+      };
+    });
+
     // Get labels
     const threadLabelsData = await db
       .select({
@@ -58,7 +136,7 @@ export async function GET(
     return NextResponse.json({
       thread: {
         ...thread,
-        emails: threadEmails,
+        emails: emailsWithAttachments,
         labels: threadLabelsData.map((tl) => ({
           ...tl.label,
           appliedBy: tl.appliedBy,
@@ -106,12 +184,11 @@ export async function PATCH(
       .where(eq(threads.id, id))
       .returning();
 
-    if (!updated) {
-      return NextResponse.json({ error: "Thread not found" }, { status: 404 });
-    }
-
-    // Broadcast SSE event so other pages can update
-    broadcastSSE({ type: "thread_updated", data: { threadId: id } });
+    // Broadcast SSE event for thread update
+    broadcastSSE({
+      type: "thread_updated",
+      data: { threadId: id },
+    });
 
     return NextResponse.json({ thread: updated });
   } catch (error) {
@@ -136,29 +213,7 @@ export async function DELETE(
   const { id } = await params;
 
   try {
-    // First check if thread exists
-    const [thread] = await db
-      .select()
-      .from(threads)
-      .where(eq(threads.id, id))
-      .limit(1);
-
-    if (!thread) {
-      return NextResponse.json({ error: "Thread not found" }, { status: 404 });
-    }
-
-    // Delete in correct order to respect foreign key constraints
-    // 1. Delete thread labels
-    await db.delete(threadLabels).where(eq(threadLabels.threadId, id));
-    
-    // 2. Delete emails
-    await db.delete(emails).where(eq(emails.threadId, id));
-    
-    // 3. Delete thread
     await db.delete(threads).where(eq(threads.id, id));
-
-    // Broadcast SSE event
-    broadcastSSE({ type: "thread_updated", data: { threadId: id } });
 
     return NextResponse.json({ success: true });
   } catch (error) {

@@ -75,22 +75,20 @@ export const mailboxes = pgTable("mailboxes", {
 });
 
 // ============================================
-// LABELS
+// LABELS (folders/categories)
 // ============================================
 export const labels = pgTable("labels", {
   id: uuid("id").defaultRandom().primaryKey(),
   name: text("name").notNull(),
-  color: text("color").notNull().default("#6b7280"),
-  description: text("description"),
+  color: text("color").default("#6b7280"),
   isSystem: boolean("is_system").default(false),
-  autoClassify: boolean("auto_classify").default(true),
+  autoClassify: boolean("auto_classify").default(false),
   sortOrder: integer("sort_order").default(0),
   createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
 });
 
 // ============================================
-// THREADS (conversation groups)
+// THREADS (conversation groupings)
 // ============================================
 export const threads = pgTable(
   "threads",
@@ -98,24 +96,23 @@ export const threads = pgTable(
     id: uuid("id").defaultRandom().primaryKey(),
     subject: text("subject"),
     snippet: text("snippet"),
-    participantAddresses: text("participant_addresses").array().default([]),
-    lastMessageAt: timestamp("last_message_at").defaultNow(),
+    participantAddresses: text("participant_addresses").array(),
     isRead: boolean("is_read").default(false),
-    isArchived: boolean("is_archived").default(false),
     isStarred: boolean("is_starred").default(false),
+    isArchived: boolean("is_archived").default(false),
     isTrashed: boolean("is_trashed").default(false),
+    lastMessageAt: timestamp("last_message_at"),
     createdAt: timestamp("created_at").defaultNow(),
     updatedAt: timestamp("updated_at").defaultNow(),
   },
   (table) => [
     index("threads_last_message_at_idx").on(table.lastMessageAt),
-    index("threads_is_archived_idx").on(table.isArchived),
-    index("threads_is_trashed_idx").on(table.isTrashed),
+    index("threads_is_read_idx").on(table.isRead),
   ]
 );
 
 // ============================================
-// THREAD LABELS (junction table)
+// THREAD LABELS (many-to-many)
 // ============================================
 export const threadLabels = pgTable(
   "thread_labels",
@@ -161,10 +158,13 @@ export const emails = pgTable(
     subject: text("subject"),
     bodyText: text("body_text"),
     bodyHtml: text("body_html"),
-    attachments: jsonb("attachments").default([]),
     headers: jsonb("headers").default({}),
     sentAt: timestamp("sent_at"),
     createdAt: timestamp("created_at").defaultNow(),
+    // AI-generated fields
+    summary: text("summary"),
+    sentiment: text("sentiment"),
+    actionItems: text("action_items").array(),
   },
   (table) => [
     index("emails_thread_id_idx").on(table.threadId),
@@ -174,7 +174,79 @@ export const emails = pgTable(
 );
 
 // ============================================
-// AI CONTEXT (company info for AI compose)
+// ATTACHMENTS (file attachments for emails)
+// ============================================
+export const attachments = pgTable(
+  "attachments",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    emailId: uuid("email_id").references(() => emails.id, { onDelete: "cascade" }),
+    filename: text("filename").notNull(),
+    contentType: text("content_type").notNull(),
+    size: integer("size").notNull(),
+    storageUrl: text("storage_url"), // URL to stored file
+    storageKey: text("storage_key"), // Key for cloud storage
+    // AI-generated fields
+    summary: text("summary"),
+    extractedText: text("extracted_text"),
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (table) => [
+    index("attachments_email_id_idx").on(table.emailId),
+  ]
+);
+
+// ============================================
+// AI KNOWLEDGE BASE (categorized context)
+// ============================================
+export const aiKnowledge = pgTable(
+  "ai_knowledge",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    category: text("category").notNull(), // 'company', 'products', 'tone', 'faq', 'procedures', 'custom'
+    title: text("title").notNull(),
+    content: text("content").notNull(),
+    metadata: jsonb("metadata").default({}),
+    isActive: boolean("is_active").default(true),
+    isEditable: boolean("is_editable").default(true),
+    source: text("source").default("manual"), // 'manual', 'email_inbound', 'email_outbound', 'attachment'
+    sourceReference: text("source_reference"), // Email ID or attachment ID
+    confidence: integer("confidence"), // For AI-extracted info (1-100)
+    sortOrder: integer("sort_order").default(0),
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => [
+    index("ai_knowledge_category_idx").on(table.category),
+    index("ai_knowledge_is_active_idx").on(table.isActive),
+  ]
+);
+
+// ============================================
+// AI KNOWLEDGE PENDING (items awaiting review)
+// ============================================
+export const aiKnowledgePending = pgTable(
+  "ai_knowledge_pending",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    category: text("category").notNull(),
+    title: text("title").notNull(),
+    content: text("content").notNull(),
+    metadata: jsonb("metadata").default({}),
+    source: text("source").notNull(),
+    sourceReference: text("source_reference"),
+    confidence: integer("confidence").notNull(),
+    status: text("status").default("pending"), // 'pending', 'approved', 'rejected'
+    reviewedAt: timestamp("reviewed_at"),
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (table) => [
+    index("ai_knowledge_pending_status_idx").on(table.status),
+  ]
+);
+
+// ============================================
+// AI CONTEXT (legacy - keep for migration)
 // ============================================
 export const aiContext = pgTable("ai_context", {
   id: uuid("id").defaultRandom().primaryKey(),
@@ -202,16 +274,89 @@ export const aiLabelRules = pgTable("ai_label_rules", {
 });
 
 // ============================================
-// CONTACTS (autocomplete cache)
+// AI SETTINGS (global AI configuration)
 // ============================================
-export const contacts = pgTable("contacts", {
+export const aiSettings = pgTable("ai_settings", {
   id: uuid("id").defaultRandom().primaryKey(),
-  email: text("email").unique().notNull(),
-  name: text("name"),
-  lastContactedAt: timestamp("last_contacted_at"),
-  contactCount: integer("contact_count").default(1),
-  createdAt: timestamp("created_at").defaultNow(),
+  key: text("key").unique().notNull(),
+  value: jsonb("value").notNull(),
+  updatedAt: timestamp("updated_at").defaultNow(),
 });
+
+// ============================================
+// CONTACTS (enhanced with AI fields)
+// ============================================
+export const contacts = pgTable(
+  "contacts",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    email: text("email").unique().notNull(),
+    name: text("name"),
+    
+    // Structured data
+    company: text("company"),
+    role: text("role"),
+    phone: text("phone"),
+    website: text("website"),
+    location: text("location"),
+    timezone: text("timezone"),
+    linkedIn: text("linkedin"),
+    
+    // Relationship data
+    type: text("type").default("contact"), // 'lead', 'customer', 'partner', 'vendor', 'personal'
+    status: text("status").default("active"), // 'active', 'inactive', 'churned'
+    
+    // AI-populated fields
+    summary: text("summary"), // AI-generated relationship summary
+    interests: text("interests").array(), // Topics they're interested in
+    communicationStyle: text("communication_style"), // 'formal', 'casual', 'technical'
+    language: text("language").default("de"), // Preferred language
+    lastInteractionSummary: text("last_interaction_summary"),
+    
+    // User-editable
+    avatarUrl: text("avatar_url"),
+    notes: text("notes"),
+    tags: text("tags").array(),
+    
+    // Stats
+    emailCount: integer("email_count").default(0),
+    inboundCount: integer("inbound_count").default(0),
+    outboundCount: integer("outbound_count").default(0),
+    lastContactedAt: timestamp("last_contacted_at"),
+    firstContactedAt: timestamp("first_contacted_at"),
+    
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => [
+    index("contacts_email_idx").on(table.email),
+    index("contacts_type_idx").on(table.type),
+    index("contacts_last_contacted_idx").on(table.lastContactedAt),
+  ]
+);
+
+// ============================================
+// CONTACT KNOWLEDGE (additional info about contacts)
+// ============================================
+export const contactKnowledge = pgTable(
+  "contact_knowledge",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    contactId: uuid("contact_id")
+      .notNull()
+      .references(() => contacts.id, { onDelete: "cascade" }),
+    field: text("field").notNull(), // 'preference', 'history', 'requirement', 'note'
+    value: text("value").notNull(),
+    source: text("source").default("manual"), // 'manual', 'ai_extracted'
+    sourceReference: text("source_reference"), // Email ID
+    confidence: integer("confidence"),
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => [
+    index("contact_knowledge_contact_id_idx").on(table.contactId),
+  ]
+);
 
 // ============================================
 // RELATIONS
@@ -240,10 +385,18 @@ export const threadsRelations = relations(threads, ({ many }) => ({
   labels: many(threadLabels),
 }));
 
-export const emailsRelations = relations(emails, ({ one }) => ({
+export const emailsRelations = relations(emails, ({ one, many }) => ({
   thread: one(threads, {
     fields: [emails.threadId],
     references: [threads.id],
+  }),
+  attachments: many(attachments),
+}));
+
+export const attachmentsRelations = relations(attachments, ({ one }) => ({
+  email: one(emails, {
+    fields: [attachments.emailId],
+    references: [emails.id],
   }),
 }));
 
@@ -270,6 +423,17 @@ export const aiLabelRulesRelations = relations(aiLabelRules, ({ one }) => ({
   }),
 }));
 
+export const contactsRelations = relations(contacts, ({ many }) => ({
+  knowledge: many(contactKnowledge),
+}));
+
+export const contactKnowledgeRelations = relations(contactKnowledge, ({ one }) => ({
+  contact: one(contacts, {
+    fields: [contactKnowledge.contactId],
+    references: [contacts.id],
+  }),
+}));
+
 // ============================================
 // TYPE EXPORTS
 // ============================================
@@ -285,9 +449,46 @@ export type ThreadLabel = typeof threadLabels.$inferSelect;
 export type NewThreadLabel = typeof threadLabels.$inferInsert;
 export type Email = typeof emails.$inferSelect;
 export type NewEmail = typeof emails.$inferInsert;
+export type Attachment = typeof attachments.$inferSelect;
+export type NewAttachment = typeof attachments.$inferInsert;
+export type AIKnowledge = typeof aiKnowledge.$inferSelect;
+export type NewAIKnowledge = typeof aiKnowledge.$inferInsert;
+export type AIKnowledgePending = typeof aiKnowledgePending.$inferSelect;
+export type NewAIKnowledgePending = typeof aiKnowledgePending.$inferInsert;
 export type AIContext = typeof aiContext.$inferSelect;
 export type NewAIContext = typeof aiContext.$inferInsert;
 export type AILabelRule = typeof aiLabelRules.$inferSelect;
 export type NewAILabelRule = typeof aiLabelRules.$inferInsert;
+export type AISettings = typeof aiSettings.$inferSelect;
+export type NewAISettings = typeof aiSettings.$inferInsert;
 export type Contact = typeof contacts.$inferSelect;
 export type NewContact = typeof contacts.$inferInsert;
+export type ContactKnowledge = typeof contactKnowledge.$inferSelect;
+export type NewContactKnowledge = typeof contactKnowledge.$inferInsert;
+
+// ============================================
+// CONSTANTS
+// ============================================
+export const AI_KNOWLEDGE_CATEGORIES = [
+  { id: "company", name: "Company Information", description: "Details about your company, team, and mission" },
+  { id: "products", name: "Products & Services", description: "Information about what you offer" },
+  { id: "tone", name: "Communication Style", description: "How you want emails to sound" },
+  { id: "faq", name: "FAQ & Templates", description: "Common questions and response templates" },
+  { id: "procedures", name: "Procedures", description: "Business processes and workflows" },
+  { id: "custom", name: "Custom Knowledge", description: "Other relevant information" },
+] as const;
+
+export const CONTACT_TYPES = [
+  { id: "lead", name: "Lead", color: "#f59e0b" },
+  { id: "customer", name: "Customer", color: "#22c55e" },
+  { id: "partner", name: "Partner", color: "#8b5cf6" },
+  { id: "vendor", name: "Vendor", color: "#06b6d4" },
+  { id: "personal", name: "Personal", color: "#ec4899" },
+  { id: "contact", name: "Contact", color: "#6b7280" },
+] as const;
+
+export const CONTACT_STATUSES = [
+  { id: "active", name: "Active", color: "#22c55e" },
+  { id: "inactive", name: "Inactive", color: "#6b7280" },
+  { id: "churned", name: "Churned", color: "#ef4444" },
+] as const;

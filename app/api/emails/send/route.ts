@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth/config";
 import { db } from "@/lib/db";
-import { emails, threads, threadLabels, contacts, mailboxes, labels } from "@/lib/db/schema";
+import { emails, threads, threadLabels, contacts, mailboxes, labels, attachments } from "@/lib/db/schema";
 import { sendEmail } from "@/lib/resend/client";
 import { extractEmailAddress } from "@/lib/utils/format";
-import { eq, sql } from "drizzle-orm";
+import { eq, sql, inArray } from "drizzle-orm";
 
 export async function POST(request: NextRequest) {
   const session = await auth();
@@ -15,7 +15,19 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json();
-    const { from, to, cc, bcc, subject, body: emailBody, bodyHtml, replyToThreadId, inReplyTo, references } = body;
+    const { 
+      from, 
+      to, 
+      cc, 
+      bcc, 
+      subject, 
+      body: emailBody, 
+      bodyHtml, 
+      replyToThreadId, 
+      inReplyTo, 
+      references,
+      attachmentIds, // NEW: array of attachment IDs to link
+    } = body;
 
     // Validate from address is in mailboxes
     const [mailbox] = await db
@@ -29,6 +41,28 @@ export async function POST(request: NextRequest) {
         { error: "Invalid sender address" },
         { status: 400 }
       );
+    }
+
+    // Fetch attachments if any
+    let emailAttachments: Array<{
+      id: string;
+      filename: string;
+      contentType: string;
+      storageUrl: string | null;
+    }> = [];
+
+    if (attachmentIds?.length > 0) {
+      console.log("[Send] Fetching attachments:", attachmentIds);
+      emailAttachments = await db
+        .select({
+          id: attachments.id,
+          filename: attachments.filename,
+          contentType: attachments.contentType,
+          storageUrl: attachments.storageUrl,
+        })
+        .from(attachments)
+        .where(inArray(attachments.id, attachmentIds));
+      console.log("[Send] Found attachments:", emailAttachments.map(a => ({ filename: a.filename, hasUrl: !!a.storageUrl })));
     }
 
     // Build email headers for threading
@@ -45,6 +79,35 @@ export async function POST(request: NextRequest) {
       ? `${mailbox.displayName} <${from}>`
       : from;
 
+    // Build Resend attachments array
+    const resendAttachments = await Promise.all(
+      emailAttachments
+        .filter((a) => a.storageUrl)
+        .map(async (a) => {
+          try {
+            console.log(`[Send] Fetching attachment from storage: ${a.filename} - ${a.storageUrl}`);
+            const response = await fetch(a.storageUrl!);
+            if (!response.ok) {
+              console.error(`[Send] Failed to fetch ${a.filename}: ${response.status}`);
+              return null;
+            }
+            const buffer = await response.arrayBuffer();
+            console.log(`[Send] Fetched ${a.filename}: ${buffer.byteLength} bytes`);
+            return {
+              filename: a.filename,
+              content: Buffer.from(buffer),
+              contentType: a.contentType,
+            };
+          } catch (error) {
+            console.error(`[Send] Failed to fetch attachment ${a.filename}:`, error);
+            return null;
+          }
+        })
+    );
+
+    const validAttachments = resendAttachments.filter((a) => a !== null);
+    console.log(`[Send] Valid attachments to send: ${validAttachments.length}`);
+
     const result = await sendEmail({
       from: fromWithName,
       to,
@@ -54,6 +117,7 @@ export async function POST(request: NextRequest) {
       text: emailBody,
       html: bodyHtml,
       headers,
+      attachments: validAttachments.length > 0 ? validAttachments : undefined,
     });
 
     // Determine thread
@@ -110,6 +174,14 @@ export async function POST(request: NextRequest) {
         sentAt: new Date(),
       })
       .returning();
+
+    // Link attachments to the email
+    if (attachmentIds?.length > 0) {
+      await db
+        .update(attachments)
+        .set({ emailId: newEmail.id })
+        .where(inArray(attachments.id, attachmentIds));
+    }
 
     // Apply "Sent" label
     const [sentLabel] = await db

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { SessionProvider } from "@/components/providers/SessionProvider";
 import { ThemeProvider } from "@/components/providers/ThemeProvider";
+import { ComposeProvider } from "@/components/providers/ComposeProvider";
 import { KeyboardShortcutsModal } from "@/components/ui/KeyboardShortcutsModal";
 import { Sidebar } from "@/components/layout/Sidebar";
 import "./globals.css";
@@ -48,11 +49,13 @@ export default function RootLayout({
       >
         <ThemeProvider>
           <SessionProvider>
-            <div className="flex h-screen overflow-hidden">
-              <Sidebar />
-              <main className="flex-1 overflow-hidden lg:ml-0">{children}</main>
-            </div>
-            <KeyboardShortcutsModal />
+            <ComposeProvider>
+              <div className="flex h-screen overflow-hidden">
+                <Sidebar />
+                <main className="flex-1 overflow-hidden lg:ml-0">{children}</main>
+              </div>
+              <KeyboardShortcutsModal />
+            </ComposeProvider>
           </SessionProvider>
         </ThemeProvider>
       </body>
