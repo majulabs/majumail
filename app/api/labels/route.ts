@@ -84,9 +84,7 @@ export async function POST(request: NextRequest) {
       .values({
         name,
         color: color || "#6b7280",
-        description,
-        autoClassify: autoClassify ?? true,
-        sortOrder: (maxOrder?.maxSort || 0) + 1,
+        autoClassify: autoClassify || false,
       })
       .returning();
 

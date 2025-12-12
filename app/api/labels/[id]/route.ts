@@ -71,13 +71,10 @@ export async function PATCH(
       );
     }
 
-    const updateData: Partial<typeof labels.$inferSelect> = {
-      updatedAt: new Date(),
-    };
+    const updateData: Partial<typeof labels.$inferSelect> = {};
 
     if (name !== undefined) updateData.name = name;
     if (color !== undefined) updateData.color = color;
-    if (description !== undefined) updateData.description = description;
     if (autoClassify !== undefined) updateData.autoClassify = autoClassify;
 
     const [updated] = await db

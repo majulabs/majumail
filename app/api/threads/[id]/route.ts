@@ -78,41 +78,10 @@ export async function GET(
     );
 
     // Merge attachments into emails
-    const emailsWithAttachments = threadEmails.map((email) => {
-      // Get attachments from our attachments table
-      const dbAttachments = attachmentsByEmailId[email.id] || [];
-      
-      // Also check the email's built-in attachments field (for inbound emails)
-      const inlineAttachments = (email.attachments as Array<{
-        filename: string;
-        content_type?: string;
-        contentType?: string;
-      }>) || [];
-
-      // Combine both sources, preferring db attachments
-      const allAttachments = dbAttachments.length > 0
-        ? dbAttachments.map((a) => ({
-            id: a.id,
-            filename: a.filename,
-            contentType: a.contentType,
-            size: a.size,
-            storageUrl: a.storageUrl,
-            summary: a.summary,
-          }))
-        : inlineAttachments.map((a, index) => ({
-            id: `inline-${index}`,
-            filename: a.filename,
-            contentType: a.content_type || a.contentType || "application/octet-stream",
-            size: 0,
-            storageUrl: null,
-            summary: null,
-          }));
-
-      return {
-        ...email,
-        attachments: allAttachments,
-      };
-    });
+    const emailsWithAttachments = threadEmails.map((email) => ({
+      ...email,
+      attachments: attachmentsByEmailId[email.id] || [],
+    }));
 
     // Get labels
     const threadLabelsData = await db

@@ -83,7 +83,7 @@ export function LabelPicker({
                   >
                     <span
                       className="h-3 w-3 rounded-full"
-                      style={{ backgroundColor: label.color }}
+                      style={{ backgroundColor: label.color || "#6b7280" }}
                     />
                     <span className="flex-1 text-left text-gray-700 dark:text-gray-300">
                       {label.name}

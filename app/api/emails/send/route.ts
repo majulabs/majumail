@@ -210,13 +210,16 @@ export async function POST(request: NextRequest) {
         .values({
           email,
           lastContactedAt: new Date(),
-          contactCount: 1,
+          firstContactedAt: new Date(),
+          emailCount: 1,
+          outboundCount: 1,
         })
         .onConflictDoUpdate({
           target: contacts.email,
           set: {
             lastContactedAt: new Date(),
-            contactCount: sql`${contacts.contactCount} + 1`,
+            emailCount: sql`${contacts.emailCount} + 1`,
+            outboundCount: sql`${contacts.outboundCount} + 1`,
           },
         });
     }

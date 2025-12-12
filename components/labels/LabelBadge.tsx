@@ -19,7 +19,7 @@ export function LabelBadge({
 }: LabelBadgeProps) {
   return (
     <Badge
-      color={label.color}
+      color={label.color ?? "#6b7280"}
       onRemove={onRemove}
       size={size}
     >

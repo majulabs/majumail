@@ -45,7 +45,7 @@ interface SidebarNavProps {
   onComposeClick?: () => void;
 }
 
-export function SidebarNav({ labels = [], unreadCounts = {}, onComposeClick }: SidebarNavProps) {
+export function SidebarNav({ labels = [], unreadCounts = { inbox: 0, sent: 0, starred: 0, archived: 0, trash: 0 }, onComposeClick }: SidebarNavProps) {
   const pathname = usePathname();
   const [labelsExpanded, setLabelsExpanded] = useState(true);
 

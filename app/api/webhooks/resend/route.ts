@@ -103,27 +103,26 @@ export async function POST(request: NextRequest) {
 
     // Insert the email
     const [newEmail] = await db
-      .insert(emails)
-      .values({
-        threadId,
-        messageId: parsed.messageId,
-        inReplyTo: parsed.inReplyTo,
-        referencesHeader: parsed.references,
-        direction: "inbound",
-        fromAddress: parsed.fromAddress,
-        fromName: parsed.fromName,
-        toAddresses: parsed.toAddresses,
-        ccAddresses: parsed.ccAddresses,
-        bccAddresses: parsed.bccAddresses,
-        replyTo: parsed.replyTo,
-        subject: parsed.subject,
-        bodyText: parsed.bodyText,
-        bodyHtml: parsed.bodyHtml,
-        attachments: parsed.attachments,
-        headers: parsed.headers,
-        sentAt: new Date(),
-      })
-      .returning();
+    .insert(emails)
+    .values({
+      threadId,
+      messageId: parsed.messageId,
+      inReplyTo: parsed.inReplyTo,
+      referencesHeader: parsed.references,
+      direction: "inbound",
+      fromAddress: parsed.fromAddress,
+      fromName: parsed.fromName,
+      toAddresses: parsed.toAddresses,
+      ccAddresses: parsed.ccAddresses,
+      bccAddresses: parsed.bccAddresses,
+      replyTo: parsed.replyTo,
+      subject: parsed.subject,
+      bodyText: parsed.bodyText,
+      bodyHtml: parsed.bodyHtml,
+      headers: parsed.headers,
+      sentAt: new Date(),
+    })
+    .returning();
 
     // Update thread metadata
     await updateThreadAfterNewEmail(threadId, {
@@ -200,14 +199,17 @@ export async function POST(request: NextRequest) {
         email: contactEmail,
         name: parsed.fromName,
         lastContactedAt: new Date(),
-        contactCount: 1,
+        firstContactedAt: new Date(),
+        emailCount: 1,
+        inboundCount: 1,
       })
       .onConflictDoUpdate({
         target: contacts.email,
         set: {
           name: parsed.fromName || sql`${contacts.name}`,
           lastContactedAt: new Date(),
-          contactCount: sql`${contacts.contactCount} + 1`,
+          emailCount: sql`${contacts.emailCount} + 1`,
+          inboundCount: sql`${contacts.inboundCount} + 1`,
         },
       });
 

@@ -1,9 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth/config";
-import { db } from "@/lib/db";
-import { aiContext, emails } from "@/lib/db/schema";
-import { generateDraft } from "@/lib/ai/compose";
-import { eq, asc } from "drizzle-orm";
+import { composeEmail } from "@/lib/ai/compose";
 
 export async function POST(request: NextRequest) {
   const session = await auth();
@@ -23,29 +20,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Get AI context
-    const context = await db
-      .select()
-      .from(aiContext)
-      .where(eq(aiContext.isActive, true));
-
-    // Get thread history if replying
-    let threadHistory: typeof emails.$inferSelect[] = [];
-    if (threadId) {
-      threadHistory = await db
-        .select()
-        .from(emails)
-        .where(eq(emails.threadId, threadId))
-        .orderBy(asc(emails.sentAt));
-    }
-
-    // Generate draft
-    const result = await generateDraft({
-      instruction: additionalContext
-        ? `${instruction}\n\nAdditional context: ${additionalContext}`
-        : instruction,
-      threadHistory,
-      context,
+    // Generate draft using composeEmail (handles thread/context fetching internally)
+    const result = await composeEmail({
+      threadId,
+      instruction,
+      additionalContext,
       senderName,
     });
 

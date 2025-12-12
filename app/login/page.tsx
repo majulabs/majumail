@@ -114,10 +114,12 @@ function LoginContent() {
           {/* Form */}
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
+              <label htmlFor="email" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Email address
+              </label>
               <Input
                 type="email"
                 id="email"
-                label="Email address"
                 placeholder="your@email.com"
                 value={email}
                 onChange={(e) => {
