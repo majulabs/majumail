@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { emails, threads, threadLabels, contacts, mailboxes, labels, attachments } from "@/lib/db/schema";
 import { sendEmail } from "@/lib/resend/client";
 import { extractEmailAddress } from "@/lib/utils/format";
+import { generateEmailHtml, type EmailTemplateType } from "@/lib/email/template";
 import { eq, sql, inArray } from "drizzle-orm";
 
 export async function POST(request: NextRequest) {
@@ -22,11 +23,12 @@ export async function POST(request: NextRequest) {
       bcc, 
       subject, 
       body: emailBody, 
-      bodyHtml, 
+      bodyHtml, // Allow direct HTML override
+      templateType = "branded" as EmailTemplateType, // NEW: template selection
       replyToThreadId, 
       inReplyTo, 
       references,
-      attachmentIds, // NEW: array of attachment IDs to link
+      attachmentIds,
     } = body;
 
     // Validate from address is in mailboxes
@@ -79,6 +81,21 @@ export async function POST(request: NextRequest) {
       ? `${mailbox.displayName} <${from}>`
       : from;
 
+    // Generate HTML email using template system
+    // Priority: 1) Direct bodyHtml override, 2) Generated from template, 3) None
+    let finalHtml: string | undefined = bodyHtml;
+    
+    if (!finalHtml && templateType !== "none") {
+      // Generate HTML from template
+      finalHtml = generateEmailHtml(emailBody, templateType, {
+        senderName: mailbox.displayName || undefined,
+        // For replies, don't include heavy footer
+        includeFooter: templateType === "branded" && !replyToThreadId,
+      });
+      
+      console.log(`[Send] Generated ${templateType} HTML template`);
+    }
+
     // Build Resend attachments array
     const resendAttachments = await Promise.all(
       emailAttachments
@@ -115,7 +132,7 @@ export async function POST(request: NextRequest) {
       bcc,
       subject,
       text: emailBody,
-      html: bodyHtml,
+      html: finalHtml,
       headers,
       attachments: validAttachments.length > 0 ? validAttachments : undefined,
     });
@@ -168,7 +185,7 @@ export async function POST(request: NextRequest) {
         bccAddresses: bcc || [],
         subject,
         bodyText: emailBody,
-        bodyHtml,
+        bodyHtml: finalHtml, // Store the generated HTML
         inReplyTo,
         referencesHeader: references,
         sentAt: new Date(),
