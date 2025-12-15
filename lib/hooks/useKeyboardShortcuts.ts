@@ -75,6 +75,7 @@ export function useInboxShortcuts(options: {
   onMarkRead?: () => void;
   onNextThread?: () => void;
   onPrevThread?: () => void;
+  onSwitchRole?: () => void;
   enabled?: boolean;
 } = {}) {
   const router = useRouter();
@@ -88,10 +89,11 @@ export function useInboxShortcuts(options: {
     onMarkRead,
     onNextThread,
     onPrevThread,
+    onSwitchRole,
     enabled = true,
   } = options;
 
-  // Track "g" key for two-key sequences (g+i, g+s, g+t, g+a)
+  // Track "g" key for two-key sequences (g+i, g+s, g+t, g+a, g+u)
   const [gPressed, setGPressed] = useState(false);
   const gTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -144,6 +146,11 @@ export function useInboxShortcuts(options: {
             event.preventDefault();
             router.push("/starred");
             return;
+          case "u":
+            // Switch user/role
+            event.preventDefault();
+            onSwitchRole?.();
+            return;
         }
       }
 
@@ -166,7 +173,7 @@ export function useInboxShortcuts(options: {
         clearTimeout(gTimeoutRef.current);
       }
     };
-  }, [enabled, gPressed, router]);
+  }, [enabled, gPressed, router, onSwitchRole]);
 
   const shortcuts: Shortcut[] = [
     {
@@ -253,6 +260,7 @@ export const SHORTCUT_GROUPS = [
       { keys: ["g", "*"], description: "Go to Starred" },
       { keys: ["g", "a"], description: "Go to Archive" },
       { keys: ["g", "t"], description: "Go to Trash" },
+      { keys: ["g", "u"], description: "Switch Role" },
       { keys: ["j"], description: "Next conversation" },
       { keys: ["k"], description: "Previous conversation" },
       { keys: ["Enter"], description: "Open conversation" },

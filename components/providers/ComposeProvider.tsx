@@ -7,6 +7,7 @@ interface ReplyTo {
   from: string;
   subject: string;
   messageId?: string;
+  references?: string[];
 }
 
 interface ComposeContextType {

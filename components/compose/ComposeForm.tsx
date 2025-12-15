@@ -10,9 +10,9 @@ import {
   Paperclip,
   Trash2,
   Mail,
-  FileText,
   Palette,
   Eye,
+  Loader2,
 } from "lucide-react";
 import { Input } from "@/components/ui/Input";
 import { Textarea } from "@/components/ui/Textarea";
@@ -20,6 +20,7 @@ import { Button } from "@/components/ui/Button";
 import { SmartReplies } from "@/components/ai/SmartReplies";
 import { cn } from "@/lib/utils/cn";
 import { EmailPreview } from "@/components/compose/EmailPreview";
+import { useRole } from "@/components/providers/RoleProvider";
 import type { Mailbox } from "@/lib/db/schema";
 import type { EmailTemplateType } from "@/lib/email/template";
 
@@ -76,7 +77,17 @@ export function ComposeForm({
   replyTo,
   onSend,
 }: ComposeFormProps) {
-  const [from, setFrom] = useState(mailboxes[0]?.address || "");
+  const { activeRole } = useRole();
+  
+  // Find the mailbox matching the active role
+  const getDefaultMailbox = () => {
+    const roleMailbox = mailboxes.find(
+      (m) => m.address.toLowerCase() === activeRole.mailboxAddress.toLowerCase()
+    );
+    return roleMailbox?.address || mailboxes[0]?.address || "";
+  };
+
+  const [from, setFrom] = useState(getDefaultMailbox());
   const [to, setTo] = useState(replyTo?.to || "");
   const [subject, setSubject] = useState(
     replyTo?.subject
@@ -97,6 +108,14 @@ export function ComposeForm({
   
   const fileInputRef = useRef<HTMLInputElement>(null);
   const templateRef = useRef<HTMLDivElement>(null);
+
+  // Update default from when active role changes
+  useEffect(() => {
+    const newDefault = getDefaultMailbox();
+    if (newDefault && newDefault !== from) {
+      setFrom(newDefault);
+    }
+  }, [activeRole.mailboxAddress, mailboxes]);
 
   // Close template dropdown when clicking outside
   useEffect(() => {
@@ -130,12 +149,12 @@ export function ComposeForm({
     setAttachments([]);
   }, [replyTo]);
 
-  // Set default mailbox
+  // Set default mailbox based on active role
   useEffect(() => {
     if (mailboxes.length > 0 && !from) {
-      setFrom(mailboxes[0].address);
+      setFrom(getDefaultMailbox());
     }
-  }, [mailboxes, from]);
+  }, [mailboxes, from, activeRole.mailboxAddress]);
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -174,72 +193,66 @@ export function ComposeForm({
               : a
           )
         );
-      } catch (error) {
-        // Update state with error
+      } catch (err) {
         setAttachments((prev) =>
           prev.map((a) =>
             a.id === uploadId
-              ? { ...a, status: "error", error: (error as Error).message }
+              ? { ...a, status: "error", error: "Failed to upload" }
               : a
           )
         );
       }
     }
 
-    // Reset file input
+    // Reset input
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
   };
 
-  const handleRemoveAttachment = (uploadId: string) => {
+  const removeAttachment = (uploadId: string) => {
     setAttachments((prev) => prev.filter((a) => a.id !== uploadId));
   };
 
   const handleSend = async () => {
-    if (!to.trim() || isSending) return;
-
+    if (!to || !from) return;
+    
     setIsSending(true);
+    
     try {
-      // Collect successful attachment IDs
       const attachmentIds = attachments
         .filter((a) => a.status === "done" && a.attachmentId)
         .map((a) => a.attachmentId!);
 
-      if (onSend) {
-        await onSend({ to, subject, body, attachmentIds });
-      } else {
-        // Default send behavior - include template type
-        const res = await fetch("/api/emails/send", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            from: from,
-            to: [to.trim()],
-            subject: subject || "(no subject)",
-            body: body,
-            templateType: emailTemplate,
-            replyToThreadId: replyTo?.threadId,
-            attachmentIds,
-          }),
-        });
+      const res = await fetch("/api/emails/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          from,
+          to: [to],
+          subject,
+          body,
+          templateType: emailTemplate,
+          replyToThreadId: replyTo?.threadId,
+          inReplyTo: replyTo?.inReplyTo,
+          references: replyTo?.references,
+          attachmentIds,
+        }),
+      });
 
-        if (!res.ok) {
-          const errorData = await res.json();
-          throw new Error(errorData.error || "Failed to send email");
-        }
+      if (!res.ok) {
+        throw new Error("Failed to send");
       }
 
       onClose();
     } catch (error) {
       console.error("Send error:", error);
-      alert(`Failed to send email: ${(error as Error).message}`);
     } finally {
       setIsSending(false);
     }
   };
 
-  const handleAiGenerate = async () => {
+  const handleAIGenerate = async () => {
     if (!aiPrompt.trim()) return;
 
     setIsGenerating(true);
@@ -250,6 +263,7 @@ export function ComposeForm({
         body: JSON.stringify({
           instruction: aiPrompt,
           threadId: replyTo?.threadId,
+          senderName: activeRole.name, // Use active role's name for signature
         }),
       });
 
@@ -269,26 +283,21 @@ export function ComposeForm({
     }
   };
 
-  const handleSmartReplySelect = (preview: string) => {
-    setBody(preview);
-  };
-
   if (!isOpen) return null;
 
+  const selectedTemplate = TEMPLATE_OPTIONS.find(t => t.value === emailTemplate);
+  const selectedMailbox = mailboxes.find(m => m.address === from);
   const hasAttachments = attachments.length > 0;
-  const uploadedCount = attachments.filter((a) => a.status === "done").length;
-  const selectedMailbox = mailboxes.find((m) => m.address === from);
-  const selectedTemplate = TEMPLATE_OPTIONS.find((t) => t.value === emailTemplate);
+  const uploadingCount = attachments.filter(a => a.status === "uploading").length;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
-      {/* Backdrop */}
-      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
-
-      {/* Modal */}
-      <div className="relative w-full max-w-2xl max-h-[90vh] bg-white dark:bg-gray-900 rounded-t-xl sm:rounded-xl shadow-xl flex flex-col">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+      <div
+        className="bg-white dark:bg-gray-900 rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col"
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-800">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-700 shrink-0">
           <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
             {replyTo ? "Reply" : "New Message"}
           </h2>
@@ -384,41 +393,34 @@ export function ComposeForm({
                 )}
               </button>
 
-              {/* Dropdown */}
               {showTemplateSelector && (
-                <div className="absolute z-10 mt-1 w-full bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg overflow-hidden">
-                  {TEMPLATE_OPTIONS.map((option) => (
+                <div className="absolute top-full left-0 right-0 mt-1 z-10 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg overflow-hidden">
+                  {TEMPLATE_OPTIONS.map((template) => (
                     <button
-                      key={option.value}
+                      key={template.value}
                       type="button"
                       onClick={() => {
-                        setEmailTemplate(option.value);
+                        setEmailTemplate(template.value);
                         setShowTemplateSelector(false);
                       }}
                       className={cn(
-                        "w-full flex items-start gap-3 px-4 py-3 text-left",
-                        "hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors",
-                        emailTemplate === option.value && "bg-blue-50 dark:bg-blue-900/20"
+                        "w-full flex items-center gap-3 px-3 py-3 text-left transition-colors",
+                        emailTemplate === template.value
+                          ? "bg-blue-50 dark:bg-blue-900/20"
+                          : "hover:bg-gray-50 dark:hover:bg-gray-700"
                       )}
                     >
-                      <div
-                        className={cn(
-                          "mt-0.5 h-4 w-4 rounded-full border-2 flex items-center justify-center",
-                          emailTemplate === option.value
-                            ? "border-blue-500 bg-blue-500"
-                            : "border-gray-300 dark:border-gray-600"
-                        )}
-                      >
-                        {emailTemplate === option.value && (
-                          <div className="h-1.5 w-1.5 rounded-full bg-white" />
-                        )}
-                      </div>
-                      <div>
-                        <p className="font-medium text-gray-900 dark:text-gray-100">
-                          {option.label}
+                      <div className="flex-1">
+                        <p className={cn(
+                          "font-medium",
+                          emailTemplate === template.value
+                            ? "text-blue-600 dark:text-blue-400"
+                            : "text-gray-900 dark:text-gray-100"
+                        )}>
+                          {template.label}
                         </p>
                         <p className="text-sm text-gray-500 dark:text-gray-400">
-                          {option.description}
+                          {template.description}
                         </p>
                       </div>
                     </button>
@@ -431,179 +433,178 @@ export function ComposeForm({
             {replyTo && (
               <SmartReplies
                 threadId={replyTo.threadId}
-                onSelectReply={handleSmartReplySelect}
+                onSelectReply={setBody}
               />
             )}
 
-            {/* AI Compose Section */}
-            <div className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
-              <button
-                onClick={() => setShowAiPrompt(!showAiPrompt)}
-                className="w-full flex items-center justify-between px-3 py-2 bg-gray-50 dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-              >
-                <div className="flex items-center gap-2 text-sm">
-                  <Sparkles className="h-4 w-4 text-purple-500" />
-                  <span className="font-medium text-gray-700 dark:text-gray-300">
-                    AI Compose
-                  </span>
+            {/* Body Field */}
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                  Message
+                </label>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowPreview(!showPreview)}
+                    className={cn(
+                      "flex items-center gap-1 px-2 py-1 text-xs rounded-md transition-colors",
+                      showPreview
+                        ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300"
+                        : "text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-gray-800"
+                    )}
+                  >
+                    <Eye className="h-3.5 w-3.5" />
+                    Preview
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowAiPrompt(!showAiPrompt)}
+                    className={cn(
+                      "flex items-center gap-1 px-2 py-1 text-xs rounded-md transition-colors",
+                      showAiPrompt
+                        ? "bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300"
+                        : "text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-gray-800"
+                    )}
+                  >
+                    <Sparkles className="h-3.5 w-3.5" />
+                    AI Assist
+                  </button>
                 </div>
-                {showAiPrompt ? (
-                  <ChevronUp className="h-4 w-4 text-gray-400" />
-                ) : (
-                  <ChevronDown className="h-4 w-4 text-gray-400" />
-                )}
-              </button>
+              </div>
 
               {showAiPrompt && (
-                <div className="p-3 space-y-2 bg-purple-50 dark:bg-purple-900/20">
+                <div className="mb-2 p-3 bg-violet-50 dark:bg-violet-900/20 rounded-lg border border-violet-200 dark:border-violet-800">
+                  <p className="text-xs text-violet-600 dark:text-violet-400 mb-2">
+                    Describe what you want to write
+                  </p>
                   <div className="flex gap-2">
                     <Input
                       value={aiPrompt}
                       onChange={(e) => setAiPrompt(e.target.value)}
-                      placeholder="Describe what you want to write..."
-                      className="flex-1"
+                      placeholder="What would you like to say?"
+                      className="flex-1 text-sm"
                       onKeyDown={(e) => {
                         if (e.key === "Enter" && !e.shiftKey) {
                           e.preventDefault();
-                          handleAiGenerate();
+                          handleAIGenerate();
                         }
                       }}
                     />
                     <Button
-                      onClick={handleAiGenerate}
+                      type="button"
+                      onClick={handleAIGenerate}
                       disabled={!aiPrompt.trim() || isGenerating}
-                      isLoading={isGenerating}
+                      size="sm"
                     >
-                      Generate
+                      {isGenerating ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Sparkles className="h-4 w-4" />
+                      )}
                     </Button>
                   </div>
                 </div>
               )}
-            </div>
 
-            {/* Body */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Message
-              </label>
-              <Textarea
-                value={body}
-                onChange={(e) => setBody(e.target.value)}
-                placeholder="Write your message..."
-                rows={10}
-                className="resize-none"
-              />
+              {showPreview ? (
+                <EmailPreview
+                  body={body}
+                  templateType={emailTemplate}
+                  senderName={selectedMailbox?.displayName || activeRole.name}
+                  isOpen={showPreview}
+                  onClose={() => setShowPreview(false)}
+                />
+              ) : (
+                <Textarea
+                  value={body}
+                  onChange={(e) => setBody(e.target.value)}
+                  placeholder="Write your message..."
+                  rows={10}
+                  className="resize-none"
+                />
+              )}
             </div>
 
             {/* Attachments */}
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+            {hasAttachments && (
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
                   Attachments
                 </label>
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  className="text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 flex items-center gap-1"
-                >
-                  <Paperclip className="h-4 w-4" />
-                  Add file
-                </button>
-              </div>
-              <input
-                ref={fileInputRef}
-                type="file"
-                multiple
-                onChange={handleFileSelect}
-                className="hidden"
-              />
-
-              {hasAttachments && (
-                <div className="space-y-2">
-                  {attachments.map((attachment) => (
+                <div className="flex flex-wrap gap-2">
+                  {attachments.map((att) => (
                     <div
-                      key={attachment.id}
+                      key={att.id}
                       className={cn(
-                        "flex items-center gap-3 px-3 py-2 rounded-lg border",
-                        attachment.status === "error"
-                          ? "border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-900/20"
-                          : "border-gray-200 bg-gray-50 dark:border-gray-700 dark:bg-gray-800"
+                        "flex items-center gap-2 px-3 py-2 rounded-lg text-sm",
+                        att.status === "uploading" && "bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300",
+                        att.status === "done" && "bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300",
+                        att.status === "error" && "bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300"
                       )}
                     >
-                      <FileText className="h-4 w-4 text-gray-400" />
-                      <span className="flex-1 text-sm truncate text-gray-700 dark:text-gray-300">
-                        {attachment.file.name}
-                      </span>
-                      {attachment.status === "uploading" && (
-                        <span className="text-xs text-gray-500">Uploading...</span>
-                      )}
-                      {attachment.status === "error" && (
-                        <span className="text-xs text-red-600">{attachment.error}</span>
+                      <Paperclip className="h-4 w-4 shrink-0" />
+                      <span className="truncate max-w-[150px]">{att.file.name}</span>
+                      {att.status === "uploading" && (
+                        <Loader2 className="h-4 w-4 animate-spin shrink-0" />
                       )}
                       <button
                         type="button"
-                        onClick={() => handleRemoveAttachment(attachment.id)}
-                        className="p-1 text-gray-400 hover:text-red-500"
+                        onClick={() => removeAttachment(att.id)}
+                        className="p-0.5 hover:bg-black/10 dark:hover:bg-white/10 rounded"
                       >
-                        <Trash2 className="h-4 w-4" />
+                        <X className="h-3.5 w-3.5" />
                       </button>
                     </div>
                   ))}
                 </div>
-              )}
-            </div>
+              </div>
+            )}
           </div>
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between px-4 py-3 border-t border-gray-200 dark:border-gray-700">
-          <div className="flex items-center gap-2 text-sm text-gray-500">
-            {emailTemplate === "branded" && (
-              <span className="flex items-center gap-1 px-2 py-1 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded">
-                <Palette className="h-3 w-3" />
-                Branded
-              </span>
-            )}
-            {hasAttachments && (
-              <span className="flex items-center gap-1">
-                <Paperclip className="h-3 w-3" />
-                {uploadedCount}/{attachments.length} files
-              </span>
-            )}
-          </div>
+        <div className="flex items-center justify-between px-4 py-3 border-t border-gray-200 dark:border-gray-700 shrink-0">
           <div className="flex items-center gap-2">
-            {emailTemplate !== "none" && body.trim() && (
-              <Button
-                variant="outline"
-                onClick={() => setShowPreview(true)}
-              >
-                <Eye className="h-4 w-4 mr-2" />
-                Preview
-              </Button>
-            )}
-            <Button variant="ghost" onClick={onClose}>
-              Cancel
-            </Button>
-            <Button
-              onClick={handleSend}
-              isLoading={isSending}
-              disabled={!from || !to.trim()}
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              onChange={handleFileSelect}
+              className="hidden"
+              id="compose-form-attachments"
+            />
+            <label
+              htmlFor="compose-form-attachments"
+              className="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg cursor-pointer transition-colors"
             >
-              <Send className="h-4 w-4 mr-2" />
-              Send
-            </Button>
+              <Paperclip className="h-5 w-5" />
+            </label>
+            <button
+              type="button"
+              onClick={() => {
+                setBody("");
+                setSubject("");
+                setTo("");
+                setAttachments([]);
+              }}
+              className="p-2 text-gray-500 hover:text-red-600 dark:text-gray-400 dark:hover:text-red-400 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
+              title="Discard draft"
+            >
+              <Trash2 className="h-5 w-5" />
+            </button>
           </div>
+
+          <Button
+            onClick={handleSend}
+            disabled={isSending || !from || !to || uploadingCount > 0}
+            isLoading={isSending}
+          >
+            <Send className="h-4 w-4 mr-2" />
+            Send
+          </Button>
         </div>
       </div>
-
-      {/* Email Preview Modal */}
-      <EmailPreview
-        body={body}
-        templateType={emailTemplate}
-        senderName={selectedMailbox?.displayName || undefined}
-        isOpen={showPreview}
-        onClose={() => setShowPreview(false)}
-      />
     </div>
   );
 }

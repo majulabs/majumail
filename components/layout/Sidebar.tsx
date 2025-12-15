@@ -9,8 +9,10 @@ import { cn } from "@/lib/utils/cn";
 import { Button } from "@/components/ui/Button";
 import { Avatar } from "@/components/ui/Avatar";
 import { LabelList } from "@/components/labels/LabelList";
+import { RoleSwitcher } from "@/components/role/RoleSwitcher";
 import { useSSE } from "@/lib/hooks/useSSE";
 import { useCompose } from "@/components/providers/ComposeProvider";
+import { useRole } from "@/components/providers/RoleProvider";
 import type { Label } from "@/lib/db/schema";
 import { useState, useEffect, useCallback, useRef } from "react";
 
@@ -30,6 +32,7 @@ export function Sidebar({ className }: SidebarProps) {
   const { data: session, status } = useSession();
   const pathname = usePathname();
   const { openCompose } = useCompose();
+  const { activeRole } = useRole();
   
   // PWA support - uncomment if using PWAProvider
   // const { isInstallable, installPWA } = usePWA();
@@ -201,6 +204,11 @@ export function Sidebar({ className }: SidebarProps) {
           </button>
         </div>
 
+        {/* Role Switcher */}
+        <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-800">
+          <RoleSwitcher />
+        </div>
+
         {/* Compose Button */}
         <div className="px-4 py-4">
           <Button className="w-full" onClick={handleComposeClick}>
@@ -267,19 +275,19 @@ export function Sidebar({ className }: SidebarProps) {
               onClick={() => setShowUserMenu(!showUserMenu)}
               className="flex items-center gap-3 px-3 py-2.5 w-full rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
             >
-              <Avatar
-                email={session.user.email || ""}
-                size="sm"
-              />
+              <div
+                className="h-8 w-8 rounded-full flex items-center justify-center text-sm font-semibold text-white shrink-0"
+                style={{ backgroundColor: activeRole.avatarColor }}
+              >
+                {activeRole.name.charAt(0).toUpperCase()}
+              </div>
               <div className="flex-1 text-left min-w-0">
                 <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
-                  {session.user.name || session.user.email}
+                  {activeRole.name}
                 </p>
-                {session.user.name && (
-                  <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
-                    {session.user.email}
-                  </p>
-                )}
+                <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                  {session.user.email}
+                </p>
               </div>
               <ChevronUp className={cn(
                 "h-4 w-4 text-gray-400 transition-transform",
@@ -301,7 +309,6 @@ export function Sidebar({ className }: SidebarProps) {
                   <Settings className="h-4 w-4" />
                   Settings
                 </button>
-                <div className="border-t border-gray-200 dark:border-gray-700" />
                 <button
                   onClick={() => signOut({ callbackUrl: "/login" })}
                   className="flex items-center gap-2 w-full px-4 py-3 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
@@ -314,18 +321,6 @@ export function Sidebar({ className }: SidebarProps) {
           </div>
         </div>
       </aside>
-
-      {/* Mobile Floating Action Button for Compose */}
-      <button
-        onClick={handleComposeClick}
-        className="lg:hidden fixed bottom-6 right-6 z-40 w-14 h-14 bg-blue-500 hover:bg-blue-600 text-white rounded-full shadow-lg flex items-center justify-center transition-transform active:scale-95"
-        style={{
-          bottom: 'max(1.5rem, calc(env(safe-area-inset-bottom) + 1rem))',
-        }}
-        aria-label="Compose email"
-      >
-        <PenSquare className="h-6 w-6" />
-      </button>
     </>
   );
 }

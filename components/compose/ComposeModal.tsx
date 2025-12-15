@@ -19,6 +19,7 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Textarea } from "@/components/ui/Textarea";
 import { useCompose } from "@/components/providers/ComposeProvider";
+import { useRole } from "@/components/providers/RoleProvider";
 import { EmailPreview } from "@/components/compose/EmailPreview";
 import type { EmailTemplateType } from "@/lib/email/template";
 
@@ -57,6 +58,7 @@ const TEMPLATE_OPTIONS: { value: EmailTemplateType; label: string; description: 
 
 export function ComposeModal() {
   const { isOpen, closeCompose, replyTo, threadId, defaultTo, defaultSubject } = useCompose();
+  const { activeRole } = useRole();
   
   // Form state
   const [mailboxes, setMailboxes] = useState<Mailbox[]>([]);
@@ -87,13 +89,18 @@ export function ComposeModal() {
         .then((res) => res.json())
         .then((data) => {
           setMailboxes(data.mailboxes || []);
-          if (data.mailboxes?.length > 0 && !from) {
-            setFrom(data.mailboxes[0].address);
+          // Set default from address based on active role
+          if (data.mailboxes?.length > 0) {
+            // Find mailbox matching active role's mailbox address
+            const roleMailbox = data.mailboxes.find(
+              (m: Mailbox) => m.address.toLowerCase() === activeRole.mailboxAddress.toLowerCase()
+            );
+            setFrom(roleMailbox?.address || data.mailboxes[0].address);
           }
         })
         .catch(console.error);
     }
-  }, [isOpen, from]);
+  }, [isOpen, activeRole.mailboxAddress]);
 
   // Set defaults when opening
   useEffect(() => {
@@ -102,105 +109,70 @@ export function ComposeModal() {
       setSubject(defaultSubject || (replyTo ? `Re: ${replyTo.subject}` : ""));
       setBody("");
       setError(null);
-      setAttachments([]);
       setShowAiPrompt(false);
       setAiPrompt("");
+      setShowPreview(false);
+      setAttachments([]);
+      // Use simple template for replies
+      setEmailTemplate(replyTo ? "simple" : "branded");
     }
   }, [isOpen, defaultTo, defaultSubject, replyTo]);
 
-  // Prevent body scroll when modal is open
+  // Close template dropdown when clicking outside
   useEffect(() => {
-    if (isOpen) {
-      document.body.style.overflow = "hidden";
-    } else {
-      document.body.style.overflow = "";
-    }
-    return () => {
-      document.body.style.overflow = "";
-    };
-  }, [isOpen]);
-
-  // Close template selector when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (templateRef.current && !templateRef.current.contains(e.target as Node)) {
+    function handleClickOutside(event: MouseEvent) {
+      if (templateRef.current && !templateRef.current.contains(event.target as Node)) {
         setShowTemplateSelector(false);
       }
-    };
+    }
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // Handle escape key
-  useEffect(() => {
-    const handleEscape = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && isOpen) {
-        if (showPreview) {
-          setShowPreview(false);
-        } else {
-          closeCompose();
-        }
-      }
-    };
-    document.addEventListener("keydown", handleEscape);
-    return () => document.removeEventListener("keydown", handleEscape);
-  }, [isOpen, showPreview, closeCompose]);
-
-  // Handle Cmd/Ctrl + Enter to send
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === "Enter" && isOpen && !isSending) {
-        e.preventDefault();
-        handleSend();
-      }
-    };
-    document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [isOpen, isSending, to, from, subject, body]);
-
-  // Handle file attachment
+  // Handle file selection
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
-    if (!files?.length) return;
+    if (!files || files.length === 0) return;
 
     for (const file of Array.from(files)) {
-      const uploadId = crypto.randomUUID();
-      
-      // Add to list as uploading
-      setAttachments(prev => [...prev, {
-        id: uploadId,
-        file,
-        status: "uploading"
-      }]);
+      const uploadId = `upload-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
-      // Upload file
+      setAttachments((prev) => [
+        ...prev,
+        { id: uploadId, file, status: "uploading" },
+      ]);
+
       try {
         const formData = new FormData();
         formData.append("file", file);
-        
-        const res = await fetch("/api/attachments/upload", {
+
+        const res = await fetch("/api/attachments", {
           method: "POST",
           body: formData,
         });
-        
+
         if (!res.ok) throw new Error("Upload failed");
-        
+
         const data = await res.json();
-        
-        setAttachments(prev => prev.map(a => 
-          a.id === uploadId 
-            ? { ...a, status: "done" as const, attachmentId: data.attachmentId }
-            : a
-        ));
+
+        setAttachments((prev) =>
+          prev.map((a) =>
+            a.id === uploadId
+              ? { ...a, status: "done", attachmentId: data.attachment.id }
+              : a
+          )
+        );
       } catch (err) {
-        setAttachments(prev => prev.map(a => 
-          a.id === uploadId 
-            ? { ...a, status: "error" as const, error: "Upload failed" }
-            : a
-        ));
+        setAttachments((prev) =>
+          prev.map((a) =>
+            a.id === uploadId
+              ? { ...a, status: "error", error: "Failed to upload" }
+              : a
+          )
+        );
       }
     }
-    
+
     // Reset input
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
@@ -208,14 +180,14 @@ export function ComposeModal() {
   };
 
   // Remove attachment
-  const removeAttachment = (id: string) => {
-    setAttachments(prev => prev.filter(a => a.id !== id));
+  const removeAttachment = (uploadId: string) => {
+    setAttachments((prev) => prev.filter((a) => a.id !== uploadId));
   };
 
   // Send email
   const handleSend = async () => {
-    if (!to || !from) {
-      setError("Please fill in the recipient");
+    if (!from || !to || !subject) {
+      setError("Please fill in all required fields");
       return;
     }
 
@@ -223,22 +195,22 @@ export function ComposeModal() {
     setError(null);
 
     try {
-      // Get attachment IDs
       const attachmentIds = attachments
-        .filter(a => a.status === "done" && a.attachmentId)
-        .map(a => a.attachmentId!);
+        .filter((a) => a.status === "done" && a.attachmentId)
+        .map((a) => a.attachmentId);
 
       const res = await fetch("/api/emails/send", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           from,
-          to: [to.trim()],
-          subject: subject || "(no subject)",
+          to: [to],
+          subject,
           body,
           templateType: emailTemplate,
           replyToThreadId: threadId,
-          replyToMessageId: replyTo?.messageId,
+          inReplyTo: replyTo?.messageId,
+          references: replyTo?.references,
           attachmentIds,
         }),
       });
@@ -268,6 +240,7 @@ export function ComposeModal() {
         body: JSON.stringify({
           instruction: aiPrompt,
           threadId,
+          senderName: activeRole.name, // Use active role's name for signature
         }),
       });
 
@@ -414,41 +387,35 @@ export function ComposeModal() {
                 )}
               </button>
 
-              {/* Template Dropdown */}
+              {/* Template dropdown */}
               {showTemplateSelector && (
-                <div className="absolute z-10 mt-1 w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg overflow-hidden">
-                  {TEMPLATE_OPTIONS.map((option) => (
+                <div className="absolute top-full left-0 right-0 mt-1 z-10 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg overflow-hidden">
+                  {TEMPLATE_OPTIONS.map((template) => (
                     <button
-                      key={option.value}
+                      key={template.value}
                       type="button"
                       onClick={() => {
-                        setEmailTemplate(option.value);
+                        setEmailTemplate(template.value);
                         setShowTemplateSelector(false);
                       }}
                       className={cn(
-                        "w-full flex items-start gap-3 px-4 py-3 text-left",
-                        "hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors",
-                        emailTemplate === option.value && "bg-blue-50 dark:bg-blue-900/20"
+                        "w-full flex items-center gap-3 px-3 py-3 text-left transition-colors",
+                        emailTemplate === template.value
+                          ? "bg-blue-50 dark:bg-blue-900/20"
+                          : "hover:bg-gray-50 dark:hover:bg-gray-700"
                       )}
                     >
-                      <div
-                        className={cn(
-                          "mt-0.5 h-4 w-4 rounded-full border-2 flex items-center justify-center shrink-0",
-                          emailTemplate === option.value
-                            ? "border-blue-500 bg-blue-500"
-                            : "border-gray-300 dark:border-gray-600"
-                        )}
-                      >
-                        {emailTemplate === option.value && (
-                          <div className="h-1.5 w-1.5 rounded-full bg-white" />
-                        )}
-                      </div>
-                      <div>
-                        <p className="font-medium text-gray-900 dark:text-gray-100">
-                          {option.label}
+                      <div className="flex-1">
+                        <p className={cn(
+                          "font-medium",
+                          emailTemplate === template.value
+                            ? "text-blue-600 dark:text-blue-400"
+                            : "text-gray-900 dark:text-gray-100"
+                        )}>
+                          {template.label}
                         </p>
                         <p className="text-sm text-gray-500 dark:text-gray-400">
-                          {option.description}
+                          {template.description}
                         </p>
                       </div>
                     </button>
@@ -457,102 +424,126 @@ export function ComposeModal() {
               )}
             </div>
 
-            {/* AI Compose Section */}
-            <div className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
-              <button
-                onClick={() => setShowAiPrompt(!showAiPrompt)}
-                className="w-full flex items-center justify-between px-3 py-2 bg-gray-50 dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-              >
-                <div className="flex items-center gap-2 text-sm">
-                  <Sparkles className="h-4 w-4 text-purple-500" />
-                  <span className="font-medium text-gray-700 dark:text-gray-300">
-                    AI Compose
-                  </span>
-                </div>
-                {showAiPrompt ? (
-                  <ChevronUp className="h-4 w-4 text-gray-400" />
-                ) : (
-                  <ChevronDown className="h-4 w-4 text-gray-400" />
-                )}
-              </button>
-              
-              {showAiPrompt && (
-                <div className="p-3 border-t border-gray-200 dark:border-gray-700 space-y-2">
-                  <Textarea
-                    value={aiPrompt}
-                    onChange={(e) => setAiPrompt(e.target.value)}
-                    placeholder="Describe what you want to write... e.g., 'Write a polite follow-up about our meeting'"
-                    className="min-h-[80px]"
-                  />
-                  <Button
-                    onClick={handleAIGenerate}
-                    disabled={isGenerating || !aiPrompt.trim()}
-                    size="sm"
-                    className="w-full"
-                  >
-                    {isGenerating ? (
-                      <>
-                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                        Generating...
-                      </>
-                    ) : (
-                      <>
-                        <Sparkles className="h-4 w-4 mr-2" />
-                        Generate Draft
-                      </>
+            {/* Body */}
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                  Message
+                </label>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowPreview(!showPreview)}
+                    className={cn(
+                      "flex items-center gap-1 px-2 py-1 text-xs rounded-md transition-colors",
+                      showPreview
+                        ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300"
+                        : "text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-gray-800"
                     )}
-                  </Button>
+                  >
+                    <Eye className="h-3.5 w-3.5" />
+                    Preview
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowAiPrompt(!showAiPrompt)}
+                    className={cn(
+                      "flex items-center gap-1 px-2 py-1 text-xs rounded-md transition-colors",
+                      showAiPrompt
+                        ? "bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300"
+                        : "text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-gray-800"
+                    )}
+                  >
+                    <Sparkles className="h-3.5 w-3.5" />
+                    AI Assist
+                  </button>
+                </div>
+              </div>
+
+              {/* AI Prompt Input */}
+              {showAiPrompt && (
+                <div className="mb-2 p-3 bg-violet-50 dark:bg-violet-900/20 rounded-lg border border-violet-200 dark:border-violet-800">
+                  <p className="text-xs text-violet-600 dark:text-violet-400 mb-2">
+                    Describe what you want to write (e.g., "polite follow-up asking for project status")
+                  </p>
+                  <div className="flex gap-2">
+                    <Input
+                      value={aiPrompt}
+                      onChange={(e) => setAiPrompt(e.target.value)}
+                      placeholder="What would you like to say?"
+                      className="flex-1 text-sm"
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && !e.shiftKey) {
+                          e.preventDefault();
+                          handleAIGenerate();
+                        }
+                      }}
+                    />
+                    <Button
+                      type="button"
+                      onClick={handleAIGenerate}
+                      disabled={!aiPrompt.trim() || isGenerating}
+                      size="sm"
+                      className="shrink-0"
+                    >
+                      {isGenerating ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Sparkles className="h-4 w-4" />
+                      )}
+                    </Button>
+                  </div>
                 </div>
               )}
-            </div>
 
-            {/* Message Body */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Message
-              </label>
-              <Textarea
-                value={body}
-                onChange={(e) => setBody(e.target.value)}
-                placeholder="Write your message..."
-                className="min-h-[200px] resize-none"
-              />
+              {/* Preview or Editor */}
+              {showPreview ? (
+                <EmailPreview
+                  body={body}
+                  templateType={emailTemplate}
+                  senderName={selectedMailbox?.displayName || activeRole.name}
+                  isOpen={showPreview}
+                  onClose={() => setShowPreview(false)}
+                />
+              ) : (
+                <Textarea
+                  value={body}
+                  onChange={(e) => setBody(e.target.value)}
+                  placeholder="Write your message..."
+                  rows={10}
+                  className="resize-none"
+                />
+              )}
             </div>
 
             {/* Attachments */}
             {hasAttachments && (
               <div className="space-y-2">
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
                   Attachments
                 </label>
-                <div className="space-y-1">
-                  {attachments.map((attachment) => (
+                <div className="flex flex-wrap gap-2">
+                  {attachments.map((att) => (
                     <div
-                      key={attachment.id}
+                      key={att.id}
                       className={cn(
-                        "flex items-center justify-between px-3 py-2 rounded-lg text-sm",
-                        attachment.status === "error"
-                          ? "bg-red-50 dark:bg-red-900/20"
-                          : "bg-gray-50 dark:bg-gray-800"
+                        "flex items-center gap-2 px-3 py-2 rounded-lg text-sm",
+                        att.status === "uploading" && "bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300",
+                        att.status === "done" && "bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300",
+                        att.status === "error" && "bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300"
                       )}
                     >
-                      <div className="flex items-center gap-2 min-w-0">
-                        <Paperclip className="h-4 w-4 text-gray-400 shrink-0" />
-                        <span className="truncate text-gray-700 dark:text-gray-300">
-                          {attachment.file.name}
-                        </span>
-                        {attachment.status === "uploading" && (
-                          <Loader2 className="h-3 w-3 animate-spin text-blue-500" />
-                        )}
-                        {attachment.status === "error" && (
-                          <span className="text-red-500 text-xs">Failed</span>
-                        )}
-                      </div>
+                      <Paperclip className="h-4 w-4 shrink-0" />
+                      <span className="truncate max-w-[150px]">{att.file.name}</span>
+                      {att.status === "uploading" && (
+                        <Loader2 className="h-4 w-4 animate-spin shrink-0" />
+                      )}
                       <button
-                        onClick={() => removeAttachment(attachment.id)}
-                        className="p-1 text-gray-400 hover:text-red-500"
+                        type="button"
+                        onClick={() => removeAttachment(att.id)}
+                        className="p-0.5 hover:bg-black/10 dark:hover:bg-white/10 rounded"
                       >
-                        <Trash2 className="h-4 w-4" />
+                        <X className="h-3.5 w-3.5" />
                       </button>
                     </div>
                   ))}
@@ -562,76 +553,48 @@ export function ComposeModal() {
           </div>
 
           {/* Footer */}
-          <div className="shrink-0 px-4 py-3 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50">
-            <div className="flex items-center justify-between gap-3">
-              {/* Left actions */}
-              <div className="flex items-center gap-2">
-                {/* Attachment button */}
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  multiple
-                  onChange={handleFileSelect}
-                  className="hidden"
-                />
-                <button
-                  onClick={() => fileInputRef.current?.click()}
-                  className="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-                  title="Add attachment"
-                >
-                  <Paperclip className="h-5 w-5" />
-                </button>
-              </div>
-
-              {/* Right actions */}
-              <div className="flex items-center gap-2">
-                {/* Preview button */}
-                {emailTemplate !== "none" && body.trim() && (
-                  <Button
-                    variant="outline"
-                    onClick={() => setShowPreview(true)}
-                  >
-                    <Eye className="h-4 w-4 mr-2" />
-                    Preview
-                  </Button>
-                )}
-                
-                {/* Send button */}
-                <Button
-                  onClick={handleSend}
-                  disabled={isSending || !to || uploadingCount > 0}
-                >
-                  {isSending ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Sending...
-                    </>
-                  ) : (
-                    <>
-                      <Send className="h-4 w-4 mr-2" />
-                      Send
-                    </>
-                  )}
-                </Button>
-              </div>
+          <div className="flex items-center justify-between px-4 py-3 border-t border-gray-200 dark:border-gray-700 shrink-0">
+            <div className="flex items-center gap-2">
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                onChange={handleFileSelect}
+                className="hidden"
+                id="compose-attachments"
+              />
+              <label
+                htmlFor="compose-attachments"
+                className="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg cursor-pointer transition-colors"
+              >
+                <Paperclip className="h-5 w-5" />
+              </label>
+              <button
+                type="button"
+                onClick={() => {
+                  setBody("");
+                  setSubject("");
+                  setTo("");
+                  setAttachments([]);
+                }}
+                className="p-2 text-gray-500 hover:text-red-600 dark:text-gray-400 dark:hover:text-red-400 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
+                title="Discard draft"
+              >
+                <Trash2 className="h-5 w-5" />
+              </button>
             </div>
-            
-            {/* Keyboard shortcut hint */}
-            <p className="text-xs text-gray-400 mt-2 text-center">
-              Press ⌘+Enter to send
-            </p>
+
+            <Button
+              onClick={handleSend}
+              disabled={isSending || !from || !to || uploadingCount > 0}
+              isLoading={isSending}
+            >
+              <Send className="h-4 w-4 mr-2" />
+              Send
+            </Button>
           </div>
         </div>
       </div>
-
-      {/* Email Preview Modal */}
-      <EmailPreview
-        body={body}
-        templateType={emailTemplate}
-        senderName={selectedMailbox?.displayName || undefined}
-        isOpen={showPreview}
-        onClose={() => setShowPreview(false)}
-      />
     </>
   );
 }
