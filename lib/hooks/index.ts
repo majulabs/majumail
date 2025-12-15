@@ -18,3 +18,6 @@ export { useThreadOperations } from "./useThreadOperations";
 
 // Thread List Page
 export { useThreadListPage } from "./useThreadListPage";
+
+// Service Worker / PWA
+export { useServiceWorker } from "./useServiceWorker";

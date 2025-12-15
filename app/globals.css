@@ -4,6 +4,12 @@
   --background: #ffffff;
   --foreground: #171717;
   color-scheme: light;
+
+  /* Safe area insets for notched phones */
+  --safe-area-inset-top: env(safe-area-inset-top, 0px);
+  --safe-area-inset-right: env(safe-area-inset-right, 0px);
+  --safe-area-inset-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-area-inset-left: env(safe-area-inset-left, 0px);
 }
 
 .dark {
@@ -19,14 +25,46 @@
   --font-mono: var(--font-geist-mono);
 }
 
+/* ==========================================
+   BASE STYLES
+   ========================================== */
+
+html {
+  /* Prevent iOS text size adjustment */
+  -webkit-text-size-adjust: 100%;
+  /* Smooth scrolling */
+  scroll-behavior: smooth;
+}
+
 body {
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-sans, Arial, Helvetica, sans-serif);
   transition: background-color 0.2s ease, color 0.2s ease;
+  /* Prevent pull-to-refresh on mobile */
+  overscroll-behavior-y: contain;
+  /* Safe area padding for notched phones */
+  padding-top: var(--safe-area-inset-top);
+  padding-bottom: var(--safe-area-inset-bottom);
+  padding-left: var(--safe-area-inset-left);
+  padding-right: var(--safe-area-inset-right);
 }
 
-/* Custom scrollbar */
+/* ==========================================
+   PWA / STANDALONE MODE STYLES
+   ========================================== */
+
+@media all and (display-mode: standalone) {
+  body {
+    /* Extra padding for standalone mode */
+    padding-top: var(--safe-area-inset-top);
+  }
+}
+
+/* ==========================================
+   SCROLLBAR STYLES
+   ========================================== */
+
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
@@ -53,21 +91,124 @@ body {
   background: #6b7280;
 }
 
-/* Focus styles */
+/* Hide scrollbars on mobile for cleaner look */
+@media (max-width: 768px) {
+  ::-webkit-scrollbar {
+    width: 0;
+    height: 0;
+    display: none;
+  }
+
+  * {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+}
+
+/* ==========================================
+   FOCUS & SELECTION STYLES
+   ========================================== */
+
 *:focus-visible {
   outline: 2px solid #3b82f6;
   outline-offset: 2px;
 }
 
-/* Selection styles */
 ::selection {
   background-color: #3b82f6;
   color: white;
 }
 
-/* Email body HTML styling */
+/* ==========================================
+   MOBILE TOUCH IMPROVEMENTS
+   ========================================== */
+
+/* Better tap targets */
+@media (hover: none) and (pointer: coarse) {
+
+  button,
+  a,
+  input,
+  select,
+  textarea {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  /* Ensure proper touch feedback */
+  button:active,
+  a:active,
+  [role="button"]:active {
+    opacity: 0.8;
+    transform: scale(0.98);
+  }
+}
+
+/* Disable double-tap zoom on interactive elements */
+button,
+a,
+input,
+select,
+textarea,
+[role="button"] {
+  touch-action: manipulation;
+}
+
+/* Prevent text selection on interactive elements */
+button,
+[role="button"] {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* Improve text rendering on mobile */
+@media (max-width: 768px) {
+  body {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+}
+
+/* ==========================================
+   iOS SPECIFIC FIXES
+   ========================================== */
+
+/* Fix iOS input zoom */
+@supports (-webkit-touch-callout: none) {
+
+  input[type="text"],
+  input[type="email"],
+  input[type="password"],
+  input[type="search"],
+  textarea,
+  select {
+    font-size: 16px !important;
+  }
+}
+
+/* iOS momentum scrolling */
+.overflow-y-auto,
+.overflow-x-auto,
+.overflow-auto {
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Fix iOS safe area for fixed elements */
+.fixed-bottom {
+  padding-bottom: max(1rem, var(--safe-area-inset-bottom));
+}
+
+.fixed-top {
+  padding-top: max(0.5rem, var(--safe-area-inset-top));
+}
+
+/* ==========================================
+   EMAIL BODY STYLES
+   ========================================== */
+
 .email-body {
   word-break: break-word;
+  overflow-wrap: break-word;
 }
 
 .email-body a {
@@ -92,10 +233,272 @@ body {
   color: #9ca3af;
 }
 
-/* Mobile touch improvements */
-@media (hover: none) {
-  button:active,
-  a:active {
-    opacity: 0.8;
+/* Email body mobile optimization */
+@media (max-width: 640px) {
+  .email-body {
+    font-size: 15px;
+    line-height: 1.6;
   }
+
+  .email-body img {
+    width: 100% !important;
+    height: auto !important;
+  }
+
+  .email-body table {
+    width: 100% !important;
+  }
+
+  .email-body td {
+    display: block;
+    width: 100% !important;
+  }
+}
+
+/* ==========================================
+   MOBILE NAVIGATION STYLES
+   ========================================== */
+
+/* Bottom navigation safe area */
+.mobile-bottom-nav {
+  padding-bottom: max(0.5rem, var(--safe-area-inset-bottom));
+}
+
+/* Mobile header safe area */
+.mobile-header {
+  padding-top: max(0.75rem, var(--safe-area-inset-top));
+}
+
+/* ==========================================
+   ANIMATION UTILITIES
+   ========================================== */
+
+/* Reduce motion for users who prefer it */
+@media (prefers-reduced-motion: reduce) {
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Smooth slide animations */
+.slide-in-from-right {
+  animation: slideInFromRight 0.3s ease-out;
+}
+
+.slide-in-from-left {
+  animation: slideInFromLeft 0.3s ease-out;
+}
+
+.slide-in-from-bottom {
+  animation: slideInFromBottom 0.3s ease-out;
+}
+
+@keyframes slideInFromRight {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes slideInFromLeft {
+  from {
+    transform: translateX(-100%);
+    opacity: 0;
+  }
+
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes slideInFromBottom {
+  from {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+/* ==========================================
+   SWIPE ACTION STYLES
+   ========================================== */
+
+.swipe-action-container {
+  position: relative;
+  overflow: hidden;
+}
+
+.swipe-action-left,
+.swipe-action-right {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 80px;
+}
+
+.swipe-action-left {
+  left: 0;
+  background: #ef4444;
+}
+
+.swipe-action-right {
+  right: 0;
+  background: #3b82f6;
+}
+
+/* ==========================================
+   LOADING STATES
+   ========================================== */
+
+.skeleton {
+  background: linear-gradient(90deg,
+      #e5e7eb 0%,
+      #f3f4f6 50%,
+      #e5e7eb 100%);
+  background-size: 200% 100%;
+  animation: skeleton-loading 1.5s ease-in-out infinite;
+}
+
+.dark .skeleton {
+  background: linear-gradient(90deg,
+      #374151 0%,
+      #4b5563 50%,
+      #374151 100%);
+  background-size: 200% 100%;
+}
+
+@keyframes skeleton-loading {
+  0% {
+    background-position: 200% 0;
+  }
+
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+/* ==========================================
+   PULL TO REFRESH INDICATOR
+   ========================================== */
+
+.pull-to-refresh-indicator {
+  position: fixed;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1000;
+  padding: 1rem;
+  pointer-events: none;
+}
+
+/* ==========================================
+   MOBILE COMPOSE FLOATING BUTTON
+   ========================================== */
+
+.mobile-fab {
+  position: fixed;
+  bottom: max(1.5rem, calc(var(--safe-area-inset-bottom) + 1rem));
+  right: 1.5rem;
+  z-index: 40;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.mobile-fab:active {
+  transform: scale(0.95);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+@media (min-width: 1024px) {
+  .mobile-fab {
+    display: none;
+  }
+}
+
+/* ==========================================
+   UTILITY CLASSES
+   ========================================== */
+
+/* Safe area utilities */
+.pb-safe {
+  padding-bottom: var(--safe-area-inset-bottom);
+}
+
+.pt-safe {
+  padding-top: var(--safe-area-inset-top);
+}
+
+.pl-safe {
+  padding-left: var(--safe-area-inset-left);
+}
+
+.pr-safe {
+  padding-right: var(--safe-area-inset-right);
+}
+
+/* Touch-friendly spacing */
+.touch-target {
+  min-height: 44px;
+  min-width: 44px;
+}
+
+/* Hide on mobile */
+@media (max-width: 640px) {
+  .hide-mobile {
+    display: none !important;
+  }
+}
+
+/* Hide on desktop */
+@media (min-width: 641px) {
+  .hide-desktop {
+    display: none !important;
+  }
+}
+
+/* Truncate text */
+.line-clamp-1 {
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.line-clamp-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.line-clamp-3 {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }

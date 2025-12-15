@@ -1,0 +1,74 @@
+{
+  "name": "MajuMail",
+  "short_name": "MajuMail",
+  "description": "A simple, clean shared email client for Marcel and Julien",
+  "start_url": "/inbox",
+  "display": "standalone",
+  "background_color": "#20293A",
+  "theme_color": "#20293A",
+  "orientation": "portrait-primary",
+  "scope": "/",
+  "lang": "en",
+  "categories": ["productivity", "utilities", "business"],
+  "icons": [
+    {
+      "src": "/mm-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable any"
+    },
+    {
+      "src": "/icons/icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable any"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Compose",
+      "short_name": "Compose",
+      "description": "Write a new email",
+      "url": "/inbox?compose=true",
+      "icons": [{ "src": "/mm-icon.svg", "sizes": "any" }]
+    },
+    {
+      "name": "Inbox",
+      "short_name": "Inbox",
+      "description": "View your inbox",
+      "url": "/inbox",
+      "icons": [{ "src": "/mm-icon.svg", "sizes": "any" }]
+    },
+    {
+      "name": "Starred",
+      "short_name": "Starred",
+      "description": "View starred emails",
+      "url": "/starred",
+      "icons": [{ "src": "/mm-icon.svg", "sizes": "any" }]
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "/screenshots/inbox-wide.png",
+      "sizes": "1280x720",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "MajuMail Inbox - Desktop"
+    },
+    {
+      "src": "/screenshots/inbox-narrow.png",
+      "sizes": "390x844",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "MajuMail Inbox - Mobile"
+    }
+  ],
+  "related_applications": [],
+  "prefer_related_applications": false
+}

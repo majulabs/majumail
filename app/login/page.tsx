@@ -3,6 +3,7 @@
 import { useState, Suspense } from "react";
 import { signIn } from "next-auth/react";
 import { useSearchParams } from "next/navigation";
+import Image from "next/image";
 import { Mail, CheckCircle, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -81,11 +82,16 @@ function LoginContent() {
     <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-950 px-4">
       <div className="max-w-md w-full">
         <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-xl p-8">
-          {/* Logo */}
+          {/* Logo - Using Custom Icon */}
           <div className="text-center mb-8">
-            <div className="h-12 w-12 bg-linear-to-br from-blue-500 to-purple-600 rounded-xl flex items-center justify-center text-white font-bold text-xl mx-auto mb-4">
-              M
-            </div>
+            <Image
+              src="/mm-icon.svg"
+              alt="MajuMail"
+              width={48}
+              height={48}
+              className="mx-auto mb-4 rounded-xl"
+              priority
+            />
             <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
               Welcome to MajuMail
             </h1>
@@ -127,6 +133,7 @@ function LoginContent() {
                   setValidationError(null);
                 }}
                 required
+                className="text-base"
               />
             </div>
             <Button type="submit" className="w-full" isLoading={isLoading}>

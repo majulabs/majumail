@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Star, Archive, Trash2, Reply, MoreHorizontal, ArrowLeft } from "lucide-react";
+import { Star, Archive, Trash2, Reply, MoreHorizontal, ArrowLeft, Share } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { EmailMessage } from "./EmailMessage";
 import { LabelBadge } from "@/components/labels/LabelBadge";
@@ -57,91 +57,98 @@ export function ThreadView({
   const displayLabels = thread.labels.filter((l) => !l.isSystem);
   const selectedLabelIds = thread.labels.map((l) => l.id);
 
-  return (
-    <div className="h-full flex flex-col">
-      {/* Header */}
-      <div className="shrink-0 px-4 sm:px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-        {/* Mobile back button */}
-        <button
-          onClick={() => router.push("/inbox")}
-          className="lg:hidden flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 mb-3"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Back to inbox
-        </button>
-        
-        <div className="flex items-start justify-between gap-4">
-          <div className="flex-1 min-w-0">
-            <h1 className="text-lg sm:text-xl font-semibold text-gray-900 dark:text-gray-100 wrap-break-word">
-              {thread.subject || "(No subject)"}
-            </h1>
-            <div className="flex items-center gap-2 mt-2 flex-wrap">
-              {displayLabels.map((label) => (
-                <LabelBadge
-                  key={label.id}
-                  label={label}
-                  onRemove={() => onRemoveLabel(label.id)}
-                  showConfidence
-                  size="md"
-                />
-              ))}
-              <LabelPicker
-                labels={allLabels}
-                selectedLabelIds={selectedLabelIds}
-                onToggle={(labelId) => {
-                  if (selectedLabelIds.includes(labelId)) {
-                    onRemoveLabel(labelId);
-                  } else {
-                    onAddLabel(labelId);
-                  }
-                }}
-              />
-            </div>
-          </div>
+  // Share functionality for mobile
+  const handleShare = async () => {
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: thread.subject || "Email thread",
+          text: thread.snippet || "",
+          url: window.location.href,
+        });
+      } catch (err) {
+        // User cancelled or share failed
+        console.log("Share cancelled or failed");
+      }
+    }
+  };
 
-          {/* Actions */}
+  return (
+    <div className="h-full flex flex-col bg-white dark:bg-gray-900">
+      {/* Mobile Header */}
+      <div className="shrink-0 border-b border-gray-200 dark:border-gray-700 mobile-header">
+        {/* Top bar with back button and actions */}
+        <div className="flex items-center justify-between px-2 py-2 sm:px-4 sm:py-3">
+          {/* Back button - larger touch target on mobile */}
+          <button
+            onClick={() => router.push("/inbox")}
+            className="flex items-center gap-1 p-2 -ml-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors touch-target"
+          >
+            <ArrowLeft className="h-5 w-5" />
+            <span className="hidden sm:inline text-sm">Back</span>
+          </button>
+
+          {/* Action buttons */}
           <div className="flex items-center gap-1">
             <button
               onClick={onStar}
-              className="p-2 text-gray-500 hover:text-yellow-500 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+              className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors touch-target"
               title={thread.isStarred ? "Unstar" : "Star"}
             >
               <Star
                 className={cn(
                   "h-5 w-5",
-                  thread.isStarred && "fill-yellow-500 text-yellow-500"
+                  thread.isStarred
+                    ? "fill-yellow-500 text-yellow-500"
+                    : "text-gray-500 dark:text-gray-400"
                 )}
               />
             </button>
+            
             <button
               onClick={onArchive}
-              className="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+              className="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors touch-target"
               title={thread.isArchived ? "Unarchive" : "Archive"}
             >
               <Archive className="h-5 w-5" />
             </button>
+            
             <button
               onClick={onTrash}
-              className="p-2 text-gray-500 hover:text-red-500 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+              className="p-2 text-gray-500 hover:text-red-500 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors touch-target"
               title={thread.isTrashed ? "Restore" : "Move to trash"}
             >
               <Trash2 className="h-5 w-5" />
             </button>
+
+            {/* Share button - mobile only */}
+            {"share" in navigator && (
+              <button
+                onClick={handleShare}
+                className="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors touch-target sm:hidden"
+                title="Share"
+              >
+                <Share className="h-5 w-5" />
+              </button>
+            )}
+
             <Dropdown
               trigger={
-                <button className="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                <button className="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors touch-target">
                   <MoreHorizontal className="h-5 w-5" />
                 </button>
               }
             >
-              <DropdownItem onClick={async () => {
-                await fetch(`/api/threads/${thread.id}`, {
-                  method: "PATCH",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({ isRead: false }),
-                });
-                router.refresh();
-              }}>
+              <DropdownItem
+                onClick={async () => {
+                  await fetch(`/api/threads/${thread.id}`, {
+                    method: "PATCH",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ isRead: false }),
+                  });
+                  router.refresh();
+                }}
+              >
                 Mark as unread
               </DropdownItem>
               <DropdownDivider />
@@ -151,11 +158,42 @@ export function ThreadView({
             </Dropdown>
           </div>
         </div>
+
+        {/* Subject and labels */}
+        <div className="px-4 pb-3 sm:pb-4">
+          <h1 className="text-base sm:text-xl font-semibold text-gray-900 dark:text-gray-100 break-words line-clamp-2">
+            {thread.subject || "(No subject)"}
+          </h1>
+          
+          {/* Labels */}
+          <div className="flex items-center gap-2 mt-2 flex-wrap">
+            {displayLabels.map((label) => (
+              <LabelBadge
+                key={label.id}
+                label={label}
+                onRemove={() => onRemoveLabel(label.id)}
+                showConfidence
+                size="sm"
+              />
+            ))}
+            <LabelPicker
+              labels={allLabels}
+              selectedLabelIds={selectedLabelIds}
+              onToggle={(labelId) => {
+                if (selectedLabelIds.includes(labelId)) {
+                  onRemoveLabel(labelId);
+                } else {
+                  onAddLabel(labelId);
+                }
+              }}
+            />
+          </div>
+        </div>
       </div>
 
-      {/* Email Messages */}
-      <div className="flex-1 overflow-y-auto p-6">
-        <div className="space-y-4">
+      {/* Email Messages - scrollable area */}
+      <div className="flex-1 overflow-y-auto">
+        <div className="p-3 sm:p-6 space-y-3 sm:space-y-4">
           {thread.emails.map((email) => (
             <EmailMessage
               key={email.id}
@@ -167,12 +205,14 @@ export function ThreadView({
         </div>
       </div>
 
-      {/* Reply Footer */}
-      <div className="shrink-0 px-6 py-4 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50">
-        <Button onClick={onReply} className="w-full sm:w-auto">
-          <Reply className="h-4 w-4 mr-2" />
-          Reply
-        </Button>
+      {/* Reply Footer - sticky at bottom */}
+      <div className="shrink-0 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 mobile-bottom-nav">
+        <div className="px-4 py-3 sm:px-6 sm:py-4">
+          <Button onClick={onReply} className="w-full sm:w-auto">
+            <Reply className="h-4 w-4 mr-2" />
+            Reply
+          </Button>
+        </div>
       </div>
     </div>
   );
