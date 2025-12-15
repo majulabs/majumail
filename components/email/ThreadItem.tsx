@@ -10,11 +10,7 @@ import {
   truncate,
   extractNameFromEmail,
 } from "@/lib/utils/format";
-import type { Thread, Label } from "@/lib/db/schema";
-
-interface ThreadWithLabels extends Thread {
-  labels: (Label & { appliedBy?: string | null; confidence?: number | null })[];
-}
+import type { ThreadWithLabels } from "@/lib/types";
 
 interface ThreadItemProps {
   thread: ThreadWithLabels;
@@ -86,14 +82,14 @@ export function ThreadItem({
               className={cn(
                 "text-sm truncate mt-0.5",
                 !thread.isRead
-                  ? "font-medium text-gray-900 dark:text-gray-100"
+                  ? "font-medium text-gray-800 dark:text-gray-200"
                   : "text-gray-600 dark:text-gray-400"
               )}
             >
-              {thread.subject || "(No subject)"}
+              {thread.subject || "(no subject)"}
             </p>
             {!thread.isRead && (
-              <span className="h-2 w-2 bg-blue-500 rounded-full shrink-0" />
+              <div className="h-2 w-2 rounded-full bg-blue-500 flex-shrink-0" />
             )}
           </div>
 
@@ -104,7 +100,7 @@ export function ThreadItem({
 
           {/* Labels */}
           {displayLabels.length > 0 && (
-            <div className="flex items-center gap-1.5 mt-2 flex-wrap">
+            <div className="flex items-center gap-1 mt-2">
               {displayLabels.map((label) => (
                 <LabelBadge key={label.id} label={label} size="sm" />
               ))}
@@ -112,7 +108,7 @@ export function ThreadItem({
           )}
         </div>
 
-        {/* Quick Actions (visible on hover) */}
+        {/* Actions */}
         <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
           <button
             onClick={(e) => handleAction(e, onStar)}
@@ -128,7 +124,7 @@ export function ThreadItem({
           </button>
           <button
             onClick={(e) => handleAction(e, onArchive)}
-            className="p-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+            className="p-1.5 text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
             title="Archive"
           >
             <Archive className="h-4 w-4" />
@@ -136,7 +132,7 @@ export function ThreadItem({
           <button
             onClick={(e) => handleAction(e, onTrash)}
             className="p-1.5 text-gray-400 hover:text-red-500 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-            title="Delete"
+            title="Trash"
           >
             <Trash2 className="h-4 w-4" />
           </button>

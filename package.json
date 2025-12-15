@@ -11,8 +11,8 @@
     "db:studio": "drizzle-kit studio",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
-    "db:reset": "tsx scripts/reset-and-seed.ts",
-    "db:seed": "tsx scripts/seed.ts"
+    "db:seed": "tsx scripts/seed.ts",
+    "db:reset": "tsx scripts/seed.ts --reset"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.71.2",

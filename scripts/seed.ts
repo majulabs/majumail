@@ -1,139 +1,284 @@
+#!/usr/bin/env tsx
+/**
+ * MajuMail Database Seed Script
+ * 
+ * Usage:
+ *   npm run db:seed          # Seed data (incremental, won't duplicate)
+ *   npm run db:reset         # Reset and seed (clears all data first)
+ * 
+ * This script consolidates the previous seed.ts and reset-and-seed.ts files.
+ */
+
 import "dotenv/config";
 import { db } from "../lib/db";
-import { mailboxes, labels, aiContext, aiLabelRules } from "../lib/db/schema";
+import { sql } from "drizzle-orm";
+import {
+  mailboxes,
+  labels,
+  aiKnowledge,
+  aiSettings,
+  aiLabelRules,
+  threads,
+  emails,
+  threadLabels,
+  contacts,
+  contactKnowledge,
+  attachments,
+  aiKnowledgePending,
+} from "../lib/db/schema";
+import { DEFAULT_AI_SETTINGS } from "../lib/types";
 
-async function seed() {
-  console.log("🌱 Starting seed...");
+// Check if --reset flag was passed
+const shouldReset = process.argv.includes("--reset");
 
-  // Mailboxes
-  console.log("📬 Creating mailboxes...");
-  await db
-    .insert(mailboxes)
-    .values([
-      { address: "marcel@mail.rechnungs-api.de", displayName: "Marcel" },
-      { address: "julien@mail.rechnungs-api.de", displayName: "Julien" },
-      { address: "support@mail.rechnungs-api.de", displayName: "Support", isShared: true },
-      { address: "info@mail.rechnungs-api.de", displayName: "Info", isShared: true },
-    ])
-    .onConflictDoNothing();
+/**
+ * Reset all data in the database
+ */
+async function resetDatabase() {
+  console.log("🗑️  Resetting database...\n");
 
-  // System labels
-  console.log("🏷️ Creating system labels...");
-  await db
-    .insert(labels)
-    .values([
-      { name: "Inbox", color: "#3b82f6", isSystem: true, autoClassify: false, sortOrder: 0 },
-      { name: "Sent", color: "#10b981", isSystem: true, autoClassify: false, sortOrder: 1 },
-      { name: "Starred", color: "#eab308", isSystem: true, autoClassify: false, sortOrder: 2 },
-      { name: "Archived", color: "#6b7280", isSystem: true, autoClassify: false, sortOrder: 3 },
-      { name: "Trash", color: "#ef4444", isSystem: true, autoClassify: false, sortOrder: 4 },
-      { name: "Spam", color: "#f97316", isSystem: true, autoClassify: false, sortOrder: 5 },
-    ])
-    .onConflictDoNothing();
+  // Delete in order to respect foreign key constraints
+  const tables = [
+    { name: "thread labels", table: threadLabels },
+    { name: "attachments", table: attachments },
+    { name: "emails", table: emails },
+    { name: "threads", table: threads },
+    { name: "AI label rules", table: aiLabelRules },
+    { name: "AI knowledge pending", table: aiKnowledgePending },
+    { name: "AI knowledge", table: aiKnowledge },
+    { name: "AI settings", table: aiSettings },
+    { name: "contact knowledge", table: contactKnowledge },
+    { name: "contacts", table: contacts },
+    { name: "labels", table: labels },
+    { name: "mailboxes", table: mailboxes },
+  ];
 
-  // Custom labels
-  console.log("🎨 Creating custom labels...");
-  const customLabels = await db
-    .insert(labels)
-    .values([
-      { name: "Customer Inquiry", color: "#f59e0b", sortOrder: 10 },
-      { name: "Partnership", color: "#8b5cf6", sortOrder: 11 },
-      { name: "Technical Support", color: "#ec4899", sortOrder: 12 },
-      { name: "Billing", color: "#14b8a6", sortOrder: 13 },
-    ])
-    .onConflictDoNothing()
-    .returning();
-
-  // AI label rules
-  console.log("🤖 Creating AI label rules...");
-  const customerLabel = customLabels.find((l) => l.name === "Customer Inquiry");
-  const partnerLabel = customLabels.find((l) => l.name === "Partnership");
-  const techLabel = customLabels.find((l) => l.name === "Technical Support");
-  const billingLabel = customLabels.find((l) => l.name === "Billing");
-
-  const rulesToInsert = [];
-
-  if (customerLabel) {
-    rulesToInsert.push({
-      labelId: customerLabel.id,
-      description: "General inquiries from potential customers about our service",
-      examples: [
-        "Interested in your API",
-        "How does RechnungsAPI work?",
-        "Looking for e-invoicing solution",
-      ],
-      keywords: ["interested", "inquiry", "information", "demo", "trial"],
-    });
+  for (const { name, table } of tables) {
+    console.log(`  Deleting ${name}...`);
+    await db.delete(table);
   }
 
-  if (partnerLabel) {
-    rulesToInsert.push({
-      labelId: partnerLabel.id,
-      description: "Partnership, integration, or business collaboration proposals",
-      examples: ["Partnership opportunity", "Integration proposal", "Collaboration"],
-      keywords: ["partnership", "collaborate", "integrate", "reseller", "white-label"],
-    });
-  }
-
-  if (techLabel) {
-    rulesToInsert.push({
-      labelId: techLabel.id,
-      description: "Technical questions, bug reports, or API issues",
-      examples: ["API returning error", "Integration help needed", "Bug report"],
-      keywords: ["error", "bug", "issue", "API", "endpoint", "integration", "technical"],
-    });
-  }
-
-  if (billingLabel) {
-    rulesToInsert.push({
-      labelId: billingLabel.id,
-      description: "Billing, payment, invoice, or pricing questions",
-      examples: ["Invoice question", "Payment failed", "Pricing inquiry"],
-      keywords: ["invoice", "payment", "billing", "price", "pricing", "cost", "subscription"],
-    });
-  }
-
-  if (rulesToInsert.length > 0) {
-    await db.insert(aiLabelRules).values(rulesToInsert).onConflictDoNothing();
-  }
-
-  // AI context
-  console.log("📚 Creating AI context...");
-  await db
-    .insert(aiContext)
-    .values([
-      {
-        key: "company_info",
-        title: "Company Information",
-        content: `RechnungsAPI is a German e-invoicing API service (www.rechnungs-api.de). 
-We convert JSON to XRechnung and ZUGFeRD formats for compliance with German B2B e-invoicing mandates. 
-Our API is simple to integrate and handles all the complexity of German e-invoicing standards.
-Founded by Marcel and Julien, both developers with a focus on making e-invoicing simple.`,
-      },
-      {
-        key: "tone",
-        title: "Communication Tone",
-        content: `Professional but friendly. We are a small startup (two founders: Marcel and Julien) so we can be personable.
-Write in German unless the conversation is in English.
-Keep emails concise and helpful.
-Be direct but polite.`,
-      },
-      {
-        key: "pricing",
-        title: "Pricing Information",
-        content: `Contact us for pricing details. We offer flexible plans based on invoice volume.
-We have a free tier for testing and small volumes.
-Enterprise pricing available for high-volume customers.`,
-      },
-    ])
-    .onConflictDoNothing();
-
-  console.log("✅ Seed completed!");
+  console.log("\n✅ Database reset complete!\n");
 }
 
+/**
+ * Seed mailboxes
+ */
+async function seedMailboxes() {
+  console.log("📬 Seeding mailboxes...");
+
+  const mailboxData = [
+    { address: "marcel@mail.rechnungs-api.de", displayName: "Marcel" },
+    { address: "julien@mail.rechnungs-api.de", displayName: "Julien" },
+    { address: "support@mail.rechnungs-api.de", displayName: "Support", isShared: true },
+    { address: "info@mail.rechnungs-api.de", displayName: "Info", isShared: true },
+  ];
+
+  for (const mailbox of mailboxData) {
+    await db.insert(mailboxes).values(mailbox).onConflictDoNothing();
+  }
+
+  console.log("  ✓ Mailboxes seeded");
+}
+
+/**
+ * Seed system and custom labels
+ */
+async function seedLabels() {
+  console.log("🏷️  Seeding labels...");
+
+  // System labels
+  const systemLabels = [
+    { name: "Inbox", color: "#3b82f6", isSystem: true, autoClassify: false, sortOrder: 0 },
+    { name: "Sent", color: "#10b981", isSystem: true, autoClassify: false, sortOrder: 1 },
+    { name: "Starred", color: "#eab308", isSystem: true, autoClassify: false, sortOrder: 2 },
+    { name: "Archived", color: "#6b7280", isSystem: true, autoClassify: false, sortOrder: 3 },
+    { name: "Spam", color: "#f97316", isSystem: true, autoClassify: false, sortOrder: 4 },
+    { name: "Trash", color: "#ef4444", isSystem: true, autoClassify: false, sortOrder: 5 },
+  ];
+
+  for (const label of systemLabels) {
+    await db.insert(labels).values(label).onConflictDoNothing();
+  }
+  console.log("  ✓ System labels seeded");
+
+  // Custom labels for classification
+  const customLabels = [
+    { name: "Invoice", color: "#8b5cf6", isSystem: false, autoClassify: true, sortOrder: 10 },
+    { name: "Support", color: "#06b6d4", isSystem: false, autoClassify: true, sortOrder: 11 },
+    { name: "Partnership", color: "#ec4899", isSystem: false, autoClassify: true, sortOrder: 12 },
+    { name: "Newsletter", color: "#84cc16", isSystem: false, autoClassify: true, sortOrder: 13 },
+    { name: "Personal", color: "#f59e0b", isSystem: false, autoClassify: true, sortOrder: 14 },
+  ];
+
+  for (const label of customLabels) {
+    await db.insert(labels).values(label).onConflictDoNothing();
+  }
+  console.log("  ✓ Custom labels seeded");
+}
+
+/**
+ * Seed AI label rules
+ */
+async function seedAILabelRules() {
+  console.log("🤖 Seeding AI label rules...");
+
+  // Fetch created labels
+  const allLabels = await db.select().from(labels);
+  const labelMap = new Map(allLabels.map((l) => [l.name, l.id]));
+
+  const rules = [
+    {
+      labelName: "Invoice",
+      description: "Invoices, bills, payment requests, receipts",
+      keywords: ["invoice", "rechnung", "payment", "bill", "receipt", "zahlung", "fälligkeit"],
+      examples: ["Your invoice is ready", "Payment confirmation", "Ihre Rechnung"],
+      senderPatterns: ["billing@", "invoices@", "accounting@"],
+    },
+    {
+      labelName: "Support",
+      description: "Customer support requests, bug reports, help requests",
+      keywords: ["help", "support", "bug", "error", "problem", "issue", "hilfe", "fehler"],
+      examples: ["I need help with", "Getting an error", "Bug report"],
+      senderPatterns: [],
+    },
+    {
+      labelName: "Partnership",
+      description: "Partnership inquiries, collaboration requests, business proposals",
+      keywords: ["partnership", "collaborate", "cooperation", "business proposal", "zusammenarbeit"],
+      examples: ["Partnership opportunity", "Let's collaborate"],
+      senderPatterns: [],
+    },
+    {
+      labelName: "Newsletter",
+      description: "Newsletters, marketing emails, announcements",
+      keywords: ["newsletter", "unsubscribe", "update", "digest", "weekly", "monthly"],
+      examples: ["Our weekly newsletter", "Don't miss out"],
+      senderPatterns: ["newsletter@", "news@", "updates@", "marketing@"],
+    },
+    {
+      labelName: "Personal",
+      description: "Personal emails from individuals, not business-related",
+      keywords: [],
+      examples: ["How are you?", "Catch up soon"],
+      senderPatterns: ["@gmail.com", "@outlook.com", "@yahoo.com", "@icloud.com"],
+    },
+  ];
+
+  for (const rule of rules) {
+    const labelId = labelMap.get(rule.labelName);
+    if (labelId) {
+      await db
+        .insert(aiLabelRules)
+        .values({
+          labelId,
+          description: rule.description,
+          keywords: rule.keywords,
+          examples: rule.examples,
+          senderPatterns: rule.senderPatterns,
+          isActive: true,
+        })
+        .onConflictDoNothing();
+    }
+  }
+
+  console.log("  ✓ AI label rules seeded");
+}
+
+/**
+ * Seed AI settings
+ */
+async function seedAISettings() {
+  console.log("⚙️  Seeding AI settings...");
+
+  await db
+    .insert(aiSettings)
+    .values({
+      key: "ai_config",
+      value: DEFAULT_AI_SETTINGS,
+    })
+    .onConflictDoNothing();
+
+  console.log("  ✓ AI settings seeded");
+}
+
+/**
+ * Seed initial AI knowledge base
+ */
+async function seedAIKnowledge() {
+  console.log("🧠 Seeding AI knowledge base...");
+
+  const knowledgeEntries = [
+    {
+      category: "company",
+      title: "Company Name",
+      content: "rechnungs-api.de - German invoice API service for developers and businesses.",
+      sortOrder: 1,
+    },
+    {
+      category: "company",
+      title: "Team Members",
+      content: "Marcel and Julien are the main team members handling customer communications and support.",
+      sortOrder: 2,
+    },
+    {
+      category: "tone",
+      title: "Communication Style",
+      content: "We communicate in a professional but friendly manner. Use German (Sie form) for German-speaking clients, English for international clients. Keep emails concise, helpful, and solution-oriented.",
+      sortOrder: 1,
+    },
+    {
+      category: "tone",
+      title: "Email Signature",
+      content: 'Always sign off with "Mit freundlichen Grüßen" for German emails and "Best regards" for English emails, followed by the sender\'s name.',
+      sortOrder: 2,
+    },
+    {
+      category: "tone",
+      title: "Language Detection",
+      content: "Match the language of the incoming email. If the sender writes in German, respond in German. If they write in English, respond in English.",
+      sortOrder: 3,
+    },
+  ];
+
+  for (const entry of knowledgeEntries) {
+    await db
+      .insert(aiKnowledge)
+      .values({
+        ...entry,
+        isActive: true,
+        isEditable: true,
+        source: "manual",
+      })
+      .onConflictDoNothing();
+  }
+
+  console.log("  ✓ AI knowledge base seeded");
+}
+
+/**
+ * Main seed function
+ */
+async function seed() {
+  console.log("🌱 Starting database seed...\n");
+
+  if (shouldReset) {
+    await resetDatabase();
+  }
+
+  await seedMailboxes();
+  await seedLabels();
+  await seedAILabelRules();
+  await seedAISettings();
+  await seedAIKnowledge();
+
+  console.log("\n🎉 Seeding complete!");
+}
+
+// Run
 seed()
   .then(() => process.exit(0))
   .catch((error) => {
-    console.error("❌ Seed failed:", error);
+    console.error("\n❌ Seeding failed:", error);
     process.exit(1);
   });

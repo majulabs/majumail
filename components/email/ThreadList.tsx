@@ -1,11 +1,7 @@
 "use client";
 
 import { ThreadItem } from "./ThreadItem";
-import type { Thread, Label } from "@/lib/db/schema";
-
-interface ThreadWithLabels extends Thread {
-  labels: (Label & { appliedBy?: string | null; confidence?: number | null })[];
-}
+import type { ThreadWithLabels } from "@/lib/types";
 
 interface ThreadListProps {
   threads: ThreadWithLabels[];
