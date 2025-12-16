@@ -16,6 +16,7 @@ import {
   Workflow,
   FileText,
   Loader2,
+  AlertCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -32,13 +33,24 @@ const CATEGORY_ICONS: Record<string, React.ElementType> = {
   custom: FileText,
 };
 
+// Detailed descriptions that explain how each category influences AI composition
 const CATEGORY_DESCRIPTIONS: Record<string, string> = {
-  company: "Information about your company, team, and mission that the AI will use when composing emails.",
-  products: "Details about your products and services to help the AI answer questions accurately.",
-  tone: "Guidelines for how emails should be written - tone, formality, language preferences.",
-  faq: "Common questions and their answers that the AI can use to respond to similar queries.",
-  procedures: "Business processes and workflows that the AI should be aware of.",
-  custom: "Any other relevant information that doesn't fit the other categories.",
+  company: "Firmeninfos (Name, Team, Kontakt), die die AI in E-Mails verwendet wenn es um euer Unternehmen geht.",
+  products: "Produkt- und Service-Details, die die AI nutzt um Kundenfragen zu euren Angeboten zu beantworten.",
+  tone: "Kommunikationsrichtlinien (Ton, Sprache, Anrede, Grußformel), die die AI in JEDER E-Mail befolgt.",
+  faq: "Häufige Fragen und Antworten, aus denen die AI bei ähnlichen Anfragen schöpfen kann.",
+  procedures: "Prozesse (Support, Billing, Feature Requests), die bestimmen wie die AI verschiedene Situationen handhabt.",
+  custom: "Sonstige relevante Infos, die in keine andere Kategorie passen aber die AI kennen sollte.",
+};
+
+// Example titles for each category to guide users
+const CATEGORY_EXAMPLES: Record<string, string[]> = {
+  company: ["Über RechnungsAPI", "Unser Team", "Kontakt & Support"],
+  products: ["API-Funktionen", "Preise & Pläne", "Unterstützte Formate"],
+  tone: ["Kommunikationsstil", "Sprache & Anrede", "E-Mail Abschluss"],
+  faq: ["Erste Schritte", "XRechnung vs ZUGFeRD", "Dokumentenspeicherung"],
+  procedures: ["Technischer Support", "Upgrade & Billing", "Feature Requests"],
+  custom: ["Partner-Infos", "Saisonale Hinweise", "Aktuelle Aktionen"],
 };
 
 interface KnowledgeCategory {
@@ -51,12 +63,13 @@ export default function KnowledgeSettingsPage() {
   const [categories, setCategories] = useState<KnowledgeCategory[]>([]);
   const [knowledge, setKnowledge] = useState<AIKnowledge[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set(["company", "products", "tone"]));
+  const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set(["company", "tone"]));
   const [editingItem, setEditingItem] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<{ title: string; content: string }>({ title: "", content: "" });
   const [isAddingNew, setIsAddingNew] = useState<string | null>(null);
   const [newForm, setNewForm] = useState<{ title: string; content: string }>({ title: "", content: "" });
   const [isSaving, setIsSaving] = useState(false);
+  const [duplicateWarning, setDuplicateWarning] = useState<string | null>(null);
 
   useEffect(() => {
     fetchKnowledge();
@@ -88,15 +101,59 @@ export default function KnowledgeSettingsPage() {
   const startEditing = (item: AIKnowledge) => {
     setEditingItem(item.id);
     setEditForm({ title: item.title, content: item.content });
+    setDuplicateWarning(null);
   };
 
   const cancelEditing = () => {
     setEditingItem(null);
     setEditForm({ title: "", content: "" });
+    setDuplicateWarning(null);
+  };
+
+  // Check for duplicate titles within the same category
+  const checkForDuplicates = (categoryId: string, title: string, excludeId?: string): boolean => {
+    const normalizedTitle = title.toLowerCase().trim();
+    const existingItems = knowledge.filter(k => 
+      k.category === categoryId && 
+      k.id !== excludeId &&
+      k.title.toLowerCase().trim() === normalizedTitle
+    );
+    return existingItems.length > 0;
+  };
+
+  // Check for similar titles
+  const checkForSimilar = (categoryId: string, title: string, excludeId?: string): string[] => {
+    const normalizedTitle = title.toLowerCase().trim();
+    const words = normalizedTitle.split(/\s+/).filter(w => w.length > 3);
+    
+    const similarItems = knowledge.filter(k => {
+      if (k.category !== categoryId || k.id === excludeId) return false;
+      const existingWords = k.title.toLowerCase().split(/\s+/);
+      const matchingWords = words.filter(w => existingWords.some(ew => ew.includes(w) || w.includes(ew)));
+      return matchingWords.length >= 1;
+    });
+
+    return similarItems.map(k => k.title);
   };
 
   const saveEdit = async (id: string) => {
     if (!editForm.title.trim() || !editForm.content.trim()) return;
+
+    const item = knowledge.find(k => k.id === id);
+    if (!item) return;
+
+    // Check for duplicates
+    if (checkForDuplicates(item.category, editForm.title, id)) {
+      setDuplicateWarning(`Ein Eintrag mit dem Titel "${editForm.title}" existiert bereits in dieser Kategorie.`);
+      return;
+    }
+
+    // Check for similar items and warn
+    const similar = checkForSimilar(item.category, editForm.title, id);
+    if (similar.length > 0 && !duplicateWarning) {
+      setDuplicateWarning(`Ähnliche Einträge existieren: ${similar.join(", ")}. Nochmal speichern zum Bestätigen.`);
+      return;
+    }
 
     setIsSaving(true);
     try {
@@ -123,15 +180,30 @@ export default function KnowledgeSettingsPage() {
   const startAddingNew = (categoryId: string) => {
     setIsAddingNew(categoryId);
     setNewForm({ title: "", content: "" });
+    setDuplicateWarning(null);
   };
 
   const cancelAddingNew = () => {
     setIsAddingNew(null);
     setNewForm({ title: "", content: "" });
+    setDuplicateWarning(null);
   };
 
   const saveNew = async (categoryId: string) => {
     if (!newForm.title.trim() || !newForm.content.trim()) return;
+
+    // Check for duplicates
+    if (checkForDuplicates(categoryId, newForm.title)) {
+      setDuplicateWarning(`Ein Eintrag mit dem Titel "${newForm.title}" existiert bereits in dieser Kategorie.`);
+      return;
+    }
+
+    // Check for similar items and warn
+    const similar = checkForSimilar(categoryId, newForm.title);
+    if (similar.length > 0 && !duplicateWarning) {
+      setDuplicateWarning(`Ähnliche Einträge existieren: ${similar.join(", ")}. Nochmal speichern zum Bestätigen.`);
+      return;
+    }
 
     setIsSaving(true);
     try {
@@ -158,7 +230,7 @@ export default function KnowledgeSettingsPage() {
   };
 
   const deleteItem = async (id: string) => {
-    if (!confirm("Are you sure you want to delete this knowledge item?")) return;
+    if (!confirm("Bist du sicher, dass du diesen Eintrag löschen möchtest?")) return;
 
     try {
       const res = await fetch(`/api/knowledge/${id}`, {
@@ -207,8 +279,24 @@ export default function KnowledgeSettingsPage() {
           AI Knowledge Base
         </h2>
         <p className="mt-1 text-gray-600 dark:text-gray-400">
-          Manage the information that Claude uses when composing and classifying emails.
+          Verwalte die Informationen, die die AI beim Schreiben von E-Mails verwendet.
+          Jede Kategorie beeinflusst unterschiedliche Aspekte der generierten E-Mails.
         </p>
+      </div>
+
+      {/* Info banner */}
+      <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+        <div className="flex gap-3">
+          <AlertCircle className="h-5 w-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
+          <div className="text-sm text-blue-800 dark:text-blue-200">
+            <p className="font-medium mb-1">So funktioniert's:</p>
+            <p>
+              Die AI liest alle aktiven Einträge beim Schreiben von E-Mails. Füge einzigartige, 
+              spezifische Informationen in jeder Kategorie hinzu. Vermeide Duplikate oder 
+              überlappende Einträge – das kann die AI verwirren.
+            </p>
+          </div>
+        </div>
       </div>
 
       <div className="space-y-4">
@@ -216,6 +304,8 @@ export default function KnowledgeSettingsPage() {
           const Icon = CATEGORY_ICONS[category.id] || FileText;
           const isExpanded = expandedCategories.has(category.id);
           const categoryItems = knowledge.filter((k) => k.category === category.id);
+          const activeCount = categoryItems.filter(k => k.isActive).length;
+          const examples = CATEGORY_EXAMPLES[category.id] || [];
 
           return (
             <div
@@ -236,7 +326,7 @@ export default function KnowledgeSettingsPage() {
                       {category.name}
                     </h3>
                     <p className="text-sm text-gray-500 dark:text-gray-400">
-                      {categoryItems.length} item{categoryItems.length !== 1 ? "s" : ""}
+                      {activeCount} active / {categoryItems.length} total
                     </p>
                   </div>
                 </div>
@@ -250,10 +340,16 @@ export default function KnowledgeSettingsPage() {
               {/* Category Content */}
               {isExpanded && (
                 <div className="border-t border-gray-200 dark:border-gray-800">
-                  <div className="p-4 bg-gray-50 dark:bg-gray-800/30">
+                  {/* Description and examples */}
+                  <div className="p-4 bg-gray-50 dark:bg-gray-800/30 space-y-2">
                     <p className="text-sm text-gray-600 dark:text-gray-400">
                       {CATEGORY_DESCRIPTIONS[category.id] || category.description}
                     </p>
+                    {examples.length > 0 && (
+                      <p className="text-xs text-gray-500 dark:text-gray-500">
+                        <span className="font-medium">Example titles:</span> {examples.join(", ")}
+                      </p>
+                    )}
                   </div>
 
                   <div className="divide-y divide-gray-200 dark:divide-gray-800">
@@ -266,91 +362,103 @@ export default function KnowledgeSettingsPage() {
                         )}
                       >
                         {editingItem === item.id ? (
+                          // Edit mode
                           <div className="space-y-3">
                             <Input
                               value={editForm.title}
-                              onChange={(e) =>
-                                setEditForm((f) => ({ ...f, title: e.target.value }))
-                              }
-                              placeholder="Title"
+                              onChange={(e) => {
+                                setEditForm({ ...editForm, title: e.target.value });
+                                setDuplicateWarning(null);
+                              }}
+                              placeholder="Titel"
+                              className="font-medium"
                             />
                             <Textarea
                               value={editForm.content}
-                              onChange={(e) =>
-                                setEditForm((f) => ({ ...f, content: e.target.value }))
-                              }
-                              placeholder="Content"
+                              onChange={(e) => setEditForm({ ...editForm, content: e.target.value })}
+                              placeholder="Inhalt - Sei spezifisch und detailliert"
                               rows={4}
                             />
-                            <div className="flex justify-end gap-2">
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={cancelEditing}
-                              >
-                                <X className="h-4 w-4 mr-1" />
-                                Cancel
-                              </Button>
+                            {duplicateWarning && (
+                              <p className="text-sm text-amber-600 dark:text-amber-400 flex items-center gap-1">
+                                <AlertCircle className="h-4 w-4" />
+                                {duplicateWarning}
+                              </p>
+                            )}
+                            <div className="flex gap-2">
                               <Button
                                 size="sm"
                                 onClick={() => saveEdit(item.id)}
-                                isLoading={isSaving}
+                                disabled={isSaving}
                               >
-                                <Save className="h-4 w-4 mr-1" />
-                                Save
+                                {isSaving ? (
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : (
+                                  <Save className="h-4 w-4" />
+                                )}
+                                <span className="ml-1">Speichern</span>
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={cancelEditing}
+                              >
+                                <X className="h-4 w-4" />
+                                <span className="ml-1">Abbrechen</span>
                               </Button>
                             </div>
                           </div>
                         ) : (
-                          <div>
-                            <div className="flex items-start justify-between">
-                              <div className="flex-1 min-w-0">
-                                <h4 className="font-medium text-gray-900 dark:text-gray-100">
-                                  {item.title}
-                                </h4>
-                                <p className="mt-1 text-sm text-gray-600 dark:text-gray-400 whitespace-pre-wrap">
-                                  {item.content}
+                          // View mode
+                          <div className="flex items-start justify-between gap-4">
+                            <div className="flex-1 min-w-0">
+                              <h4 className="font-medium text-gray-900 dark:text-gray-100">
+                                {item.title}
+                              </h4>
+                              <p className="mt-1 text-sm text-gray-600 dark:text-gray-400 whitespace-pre-wrap">
+                                {item.content}
+                              </p>
+                              {item.source !== "manual" && (
+                                <p className="mt-2 text-xs text-gray-400">
+                                  Source: {item.source}
+                                  {item.confidence && ` • Confidence: ${item.confidence}%`}
                                 </p>
-                                {item.source !== "manual" && (
-                                  <p className="mt-2 text-xs text-gray-400">
-                                    Source: {item.source}
-                                    {item.confidence && ` (${item.confidence}% confidence)`}
-                                  </p>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-1 flex-shrink-0">
+                              <button
+                                onClick={() => toggleActive(item.id, item.isActive ?? true)}
+                                className={cn(
+                                  "p-1.5 rounded-lg transition-colors",
+                                  item.isActive
+                                    ? "text-green-600 bg-green-50 dark:bg-green-900/20"
+                                    : "text-gray-400 bg-gray-100 dark:bg-gray-800"
                                 )}
-                              </div>
-                              <div className="flex items-center gap-1 ml-4">
-                                <button
-                                  onClick={() => toggleActive(item.id, item.isActive ?? true)}
-                                  className={cn(
-                                    "p-1.5 rounded-lg transition-colors",
-                                    item.isActive
-                                      ? "text-green-600 bg-green-50 dark:bg-green-900/20"
-                                      : "text-gray-400 bg-gray-100 dark:bg-gray-800"
-                                  )}
-                                  title={item.isActive ? "Disable" : "Enable"}
-                                >
-                                  <div className={cn(
-                                    "w-3 h-3 rounded-full",
-                                    item.isActive ? "bg-green-500" : "bg-gray-400"
-                                  )} />
-                                </button>
-                                {item.isEditable && (
-                                  <>
-                                    <button
-                                      onClick={() => startEditing(item)}
-                                      className="p-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800"
-                                    >
-                                      <Pencil className="h-4 w-4" />
-                                    </button>
-                                    <button
-                                      onClick={() => deleteItem(item.id)}
-                                      className="p-1.5 text-gray-400 hover:text-red-600 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800"
-                                    >
-                                      <Trash2 className="h-4 w-4" />
-                                    </button>
-                                  </>
-                                )}
-                              </div>
+                                title={item.isActive ? "Deaktivieren (AI nutzt das nicht)" : "Aktivieren (AI nutzt das)"}
+                              >
+                                <div className={cn(
+                                  "w-3 h-3 rounded-full",
+                                  item.isActive ? "bg-green-500" : "bg-gray-400"
+                                )} />
+                              </button>
+                              {item.isEditable && (
+                                <>
+                                  <button
+                                    onClick={() => startEditing(item)}
+                                    className="p-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800"
+                                    title="Bearbeiten"
+                                  >
+                                    <Pencil className="h-4 w-4" />
+                                  </button>
+                                  <button
+                                    onClick={() => deleteItem(item.id)}
+                                    className="p-1.5 text-gray-400 hover:text-red-600 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800"
+                                    title="Löschen"
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </button>
+                                </>
+                              )}
                             </div>
                           </div>
                         )}
@@ -359,54 +467,63 @@ export default function KnowledgeSettingsPage() {
 
                     {/* Add New Item */}
                     {isAddingNew === category.id ? (
-                      <div className="p-4 bg-blue-50 dark:bg-blue-900/20">
-                        <div className="space-y-3">
-                          <Input
-                            value={newForm.title}
-                            onChange={(e) =>
-                              setNewForm((f) => ({ ...f, title: e.target.value }))
-                            }
-                            placeholder="Title"
-                            autoFocus
-                          />
-                          <Textarea
-                            value={newForm.content}
-                            onChange={(e) =>
-                              setNewForm((f) => ({ ...f, content: e.target.value }))
-                            }
-                            placeholder="Content"
-                            rows={4}
-                          />
-                          <div className="flex justify-end gap-2">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={cancelAddingNew}
-                            >
-                              <X className="h-4 w-4 mr-1" />
-                              Cancel
-                            </Button>
-                            <Button
-                              size="sm"
-                              onClick={() => saveNew(category.id)}
-                              isLoading={isSaving}
-                              disabled={!newForm.title.trim() || !newForm.content.trim()}
-                            >
-                              <Save className="h-4 w-4 mr-1" />
-                              Save
-                            </Button>
-                          </div>
+                      <div className="p-4 space-y-3">
+                        <Input
+                          value={newForm.title}
+                          onChange={(e) => {
+                            setNewForm({ ...newForm, title: e.target.value });
+                            setDuplicateWarning(null);
+                          }}
+                          placeholder={`Titel (z.B. ${examples[0] || "Neuer Eintrag"})`}
+                          className="font-medium"
+                          autoFocus
+                        />
+                        <Textarea
+                          value={newForm.content}
+                          onChange={(e) => setNewForm({ ...newForm, content: e.target.value })}
+                          placeholder="Inhalt - Sei spezifisch und detailliert, damit die AI die Info effektiv nutzen kann"
+                          rows={4}
+                        />
+                        {duplicateWarning && (
+                          <p className="text-sm text-amber-600 dark:text-amber-400 flex items-center gap-1">
+                            <AlertCircle className="h-4 w-4" />
+                            {duplicateWarning}
+                          </p>
+                        )}
+                        <div className="flex gap-2">
+                          <Button
+                            size="sm"
+                            onClick={() => saveNew(category.id)}
+                            disabled={isSaving || !newForm.title.trim() || !newForm.content.trim()}
+                          >
+                            {isSaving ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <Save className="h-4 w-4" />
+                            )}
+                            <span className="ml-1">Speichern</span>
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={cancelAddingNew}
+                          >
+                            <X className="h-4 w-4" />
+                            <span className="ml-1">Abbrechen</span>
+                          </Button>
                         </div>
                       </div>
                     ) : (
                       <div className="p-4">
-                        <button
+                        <Button
+                          size="sm"
+                          variant="ghost"
                           onClick={() => startAddingNew(category.id)}
-                          className="flex items-center gap-2 text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
+                          className="w-full justify-center border border-dashed border-gray-300 dark:border-gray-700"
                         >
-                          <Plus className="h-4 w-4" />
-                          Add {category.name.toLowerCase()} item
-                        </button>
+                          <Plus className="h-4 w-4 mr-1" />
+                          {category.name} Eintrag hinzufügen
+                        </Button>
                       </div>
                     )}
                   </div>

@@ -204,39 +204,124 @@ async function seedAISettings() {
 
 /**
  * Seed initial AI knowledge base
+ * 
+ * IMPORTANT: Each entry should be unique - no duplicate or similar items.
+ * These entries directly influence AI email composition via buildKnowledgeContext().
+ * 
+ * Content based on: https://www.rechnungs-api.de/
+ * Tone: Young startup, casual "Du" form
  */
 async function seedAIKnowledge() {
   console.log("🧠 Seeding AI knowledge base...");
 
   const knowledgeEntries = [
+    // ============================================
+    // COMPANY INFORMATION
+    // ============================================
     {
       category: "company",
-      title: "Company Name",
-      content: "rechnungs-api.de - German invoice API service for developers and businesses.",
+      title: "Über RechnungsAPI",
+      content: "RechnungsAPI (rechnungs-api.de) ist eine API-Lösung für rechtskonforme deutsche E-Rechnungen. Wir helfen Entwicklern und Unternehmen, XRechnung und ZUGFeRD Dokumente einfach per API zu erstellen – ohne sich mit komplexen XML-Standards rumschlagen zu müssen.",
       sortOrder: 1,
     },
     {
       category: "company",
-      title: "Team Members",
-      content: "Marcel and Julien are the main team members handling customer communications and support.",
+      title: "Unser Team",
+      content: "Wir sind Marcel und Julien und haben zusammen rechnungs-api entwickelt und gegründet. Wir haben beide viel Erfahrung im Umgang mit E Rechnungen und haben eine sehr gut dokumentierte API gebaut, weil wir selber keine gute gefunen haben. Wir kooperieren mit ferd-net.de um laufend auf dem aktuellsten Stand der regularien zu bleibne. Wir antworten persönlich und schnell!",
       sortOrder: 2,
     },
     {
+      category: "company",
+      title: "Kontakt & Support",
+      content: "E-Mail Support über support@mail.rechnungs-api.de. Enterprise-Anfragen an sales@rechnungs-api.de. Wir antworten in der Regel innerhalb weniger Stunden während der Geschäftszeiten (Mo-Fr).",
+      sortOrder: 3,
+    },
+
+    // ============================================
+    // PRODUCTS & SERVICES
+    // ============================================
+    {
+      category: "products",
+      title: "API-Funktionen",
+      content: "Unsere REST-API ermöglicht: Erstellung von Rechnungen, Gutschriften, Angeboten, Aufträgen, Bestellungen und Lieferscheinen. E-Rechnungen in XRechnung und ZUGFeRD Format. Anpassbare PDF-Designs mit eigenen Themes, Schriftarten und Briefpapier. Automatische Generierung von Buchungssätzen für die Finanzbuchhaltung. OpenAPI/Swagger Dokumentation.",
+      sortOrder: 1,
+    },
+    {
+      category: "products",
+      title: "Preise & Pläne",
+      content: "Free Plan: Kostenlos, 3 Dokumente/Monat, perfekt zum Testen. Plus Plan: 24,99€/Monat (jährlich), 10.000 Dokumente/Monat, alle Dokumenttypen, anpassbare Designs. Enterprise: Individueller Preis, unbegrenzte Dokumente, Custom-Designs, Premium Support, Self-Hosting möglich. Alle Preise zzgl. USt.",
+      sortOrder: 2,
+    },
+    {
+      category: "products",
+      title: "Unterstützte Formate",
+      content: "E-Rechnungsformate: XRechnung (für Behörden/B2G), ZUGFeRD 2.1 (für B2B). Standard PDF für B2C. Die API kümmert sich um die komplexe UBL/XML-Generierung – du schickst einfach JSON und bekommst das fertige Dokument zurück.",
+      sortOrder: 3,
+    },
+
+    // ============================================
+    // COMMUNICATION STYLE (TONE)
+    // ============================================
+    {
       category: "tone",
-      title: "Communication Style",
-      content: "We communicate in a professional but friendly manner. Use German (Sie form) for German-speaking clients, English for international clients. Keep emails concise, helpful, and solution-oriented.",
+      title: "Kommunikationsstil",
+      content: "Wir sind ein junges Startup und kommunizieren locker und direkt. Verwende 'Du' statt 'Sie' – auch bei Neukunden. Sei freundlich, hilfsbereit und lösungsorientiert. Keine steifen Floskeln, sondern echte Gespräche auf Augenhöhe.",
       sortOrder: 1,
     },
     {
       category: "tone",
-      title: "Email Signature",
-      content: 'Always sign off with "Mit freundlichen Grüßen" for German emails and "Best regards" for English emails, followed by the sender\'s name.',
+      title: "Sprache & Anrede",
+      content: "Deutsche E-Mails: Immer 'Du' verwenden. Anrede z.B. 'Hey [Name],' oder 'Hi [Name],'. Englische E-Mails: Casual but professional, 'Hi [Name],' works great. Sprache der Antwort immer an die Sprache der Anfrage anpassen.",
       sortOrder: 2,
     },
     {
       category: "tone",
-      title: "Language Detection",
-      content: "Match the language of the incoming email. If the sender writes in German, respond in German. If they write in English, respond in English.",
+      title: "E-Mail Abschluss",
+      content: "Deutsche E-Mails: 'Viele Grüße' oder 'Beste Grüße' + Absendername. NICHT 'Mit freundlichen Grüßen' – das ist uns zu förmlich. Englische E-Mails: 'Best,' oder 'Cheers,' + Absendername. Halte E-Mails kurz und auf den Punkt.",
+      sortOrder: 3,
+    },
+
+    // ============================================
+    // FAQ & TEMPLATES
+    // ============================================
+    {
+      category: "faq",
+      title: "Erste Schritte",
+      content: "Zum Starten: 1) Kostenlos registrieren auf rechnungs-api.de/dashboard. 2) API-Key im Dashboard generieren. 3) API-Dokumentation unter rechnungs-api.de/docs checken. 4) Erste Test-Rechnung erstellen. Der Free Plan reicht zum Ausprobieren völlig aus!",
+      sortOrder: 1,
+    },
+    {
+      category: "faq",
+      title: "XRechnung vs ZUGFeRD",
+      content: "XRechnung: Pflicht für Rechnungen an deutsche Behörden (B2G). Reines XML-Format nach EU-Norm EN 16931. ZUGFeRD: Hybrid-Format mit PDF + eingebettetem XML. Ideal für B2B, weil der Empfänger das PDF auch ohne spezielle Software lesen kann. Unsere API kann beides!",
+      sortOrder: 2,
+    },
+    {
+      category: "faq",
+      title: "Dokumentenspeicherung",
+      content: "Generierte Dokumente werden 24 Stunden bei uns gespeichert und können in dieser Zeit abgerufen werden. Für längere Aufbewahrung: Dokumente direkt nach Erstellung in eurem eigenen System speichern. Enterprise-Kunden können längere Speicherzeiten vereinbaren.",
+      sortOrder: 3,
+    },
+
+    // ============================================
+    // PROCEDURES
+    // ============================================
+    {
+      category: "procedures",
+      title: "Technischer Support",
+      content: "Bei technischen Problemen: Schick uns die Fehlermeldung, den Request-Body (ohne sensible Daten), und den Zeitpunkt des Fehlers. Je mehr Infos, desto schneller können wir helfen.",
+      sortOrder: 1,
+    },
+    {
+      category: "procedures",
+      title: "Upgrade & Billing",
+      content: "Upgrades können jederzeit im Dashboard durchgeführt werden. Zahlung läuft über Stripe (Kreditkarte). Bei Fragen zur Rechnung oder für Enterprise-Anfragen einfach an uns wenden. Wir finden immer eine Lösung!",
+      sortOrder: 2,
+    },
+    {
+      category: "procedures",
+      title: "Feature Requests",
+      content: "Wir freuen uns über Feedback und Feature-Wünsche! Einfach per E-Mail schicken. Wir können nicht alles umsetzen, aber wir hören zu und priorisieren nach Kundenbedarf. Beliebte Requests schaffen es oft schnell in die Roadmap.",
       sortOrder: 3,
     },
   ];
