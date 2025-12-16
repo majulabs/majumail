@@ -5,11 +5,13 @@ import { useParams, useRouter } from "next/navigation";
 import { Header } from "@/components/layout/Header";
 import { ThreadList } from "@/components/email/ThreadList";
 import { useThreadListPage } from "@/lib/hooks/useThreadListPage";
+import { useRole } from "@/components/providers/RoleProvider";
 
 export default function LabelPage() {
   const params = useParams();
   const router = useRouter();
   const labelId = params.labelId as string;
+  const { activeRole } = useRole();
   const [labelName, setLabelName] = useState<string>("Label");
 
   // Fetch label name
@@ -43,7 +45,7 @@ export default function LabelPage() {
   return (
     <div className="h-full flex flex-col">
       <Header
-        title={labelName}
+        title={`${labelName} - ${activeRole.name}`}
         showSearch
         onRefresh={handleRefresh}
         isRefreshing={isRefreshing}
@@ -55,7 +57,7 @@ export default function LabelPage() {
           onStarThread={handleStarThread}
           onArchiveThread={handleArchiveThread}
           onTrashThread={handleTrashThread}
-          emptyMessage={`No emails in ${labelName}`}
+          emptyMessage={`No emails in ${labelName} for ${activeRole.name}`}
         />
       </div>
     </div>

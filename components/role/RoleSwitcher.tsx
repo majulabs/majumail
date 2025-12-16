@@ -1,41 +1,48 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { ChevronDown, Check, Users } from "lucide-react";
+import { ChevronDown, Check } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { useRole } from "@/components/providers/RoleProvider";
-import type { TeamMember } from "@/lib/types/role";
+import type { Role } from "@/lib/types/role";
 
 interface RoleSwitcherProps {
   className?: string;
   compact?: boolean;
 }
 
-function MemberAvatar({ member, size = "md" }: { member: TeamMember; size?: "sm" | "md" }) {
+function RoleAvatar({ role, size = "md" }: { role: Role; size?: "sm" | "md" }) {
   const sizeClasses = size === "sm" ? "h-6 w-6 text-xs" : "h-8 w-8 text-sm";
-  
+
   return (
     <div
       className={cn(
         "rounded-full flex items-center justify-center font-semibold text-white shrink-0",
         sizeClasses
       )}
-      style={{ backgroundColor: member.avatarColor }}
+      style={{ backgroundColor: role.avatarColor }}
     >
-      {member.name.charAt(0).toUpperCase()}
+      {role.name.charAt(0).toUpperCase()}
     </div>
   );
 }
 
+/**
+ * Standalone Role Switcher component
+ * Note: This is now also integrated into the Sidebar user menu
+ */
 export function RoleSwitcher({ className, compact = false }: RoleSwitcherProps) {
-  const { activeRole, activeRoleId, switchRole, teamMembers, otherMember } = useRole();
+  const { activeRole, activeRoleId, switchRole, allRoles } = useRole();
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   // Close dropdown when clicking outside
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+      if (
+        dropdownRef.current &&
+        !dropdownRef.current.contains(event.target as Node)
+      ) {
         setIsOpen(false);
       }
     }
@@ -54,26 +61,28 @@ export function RoleSwitcher({ className, compact = false }: RoleSwitcherProps) 
     return () => document.removeEventListener("keydown", handleEscape);
   }, []);
 
-  const handleSwitch = (memberId: string) => {
-    switchRole(memberId as "marcel" | "julien");
+  const handleSwitch = (roleId: string) => {
+    switchRole(roleId as "marcel" | "julien" | "support" | "info");
     setIsOpen(false);
   };
 
-  // Quick switch mode (compact) - just shows avatar and switches on click
+  // Compact mode - cycle through roles
   if (compact) {
+    const currentIndex = allRoles.findIndex((r) => r.id === activeRoleId);
+    const nextRole = allRoles[(currentIndex + 1) % allRoles.length];
+
     return (
       <button
-        onClick={() => handleSwitch(otherMember.id)}
+        onClick={() => handleSwitch(nextRole.id)}
         className={cn(
           "flex items-center gap-2 p-2 rounded-lg transition-colors",
           "hover:bg-gray-100 dark:hover:bg-gray-800",
           "text-gray-600 dark:text-gray-400",
           className
         )}
-        title={`Switch to ${otherMember.name}`}
+        title={`Switch to ${nextRole.name}`}
       >
-        <Users className="h-4 w-4" />
-        <MemberAvatar member={activeRole} size="sm" />
+        <RoleAvatar role={activeRole} size="sm" />
       </button>
     );
   }
@@ -90,7 +99,7 @@ export function RoleSwitcher({ className, compact = false }: RoleSwitcherProps) 
           "border border-blue-200/50 dark:border-blue-700/50"
         )}
       >
-        <MemberAvatar member={activeRole} />
+        <RoleAvatar role={activeRole} />
         <div className="flex-1 text-left min-w-0">
           <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
             Viewing as {activeRole.name}
@@ -112,15 +121,15 @@ export function RoleSwitcher({ className, compact = false }: RoleSwitcherProps) 
         <div className="absolute top-full left-0 right-0 mt-1 z-50 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg overflow-hidden">
           <div className="px-3 py-2 border-b border-gray-100 dark:border-gray-700">
             <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-              Switch Role
+              View as
             </p>
           </div>
-          {teamMembers.map((member) => {
-            const isActive = member.id === activeRoleId;
+          {allRoles.map((role) => {
+            const isActive = role.id === activeRoleId;
             return (
               <button
-                key={member.id}
-                onClick={() => handleSwitch(member.id)}
+                key={role.id}
+                onClick={() => handleSwitch(role.id)}
                 className={cn(
                   "flex items-center gap-3 w-full px-3 py-3 transition-colors",
                   isActive
@@ -128,7 +137,7 @@ export function RoleSwitcher({ className, compact = false }: RoleSwitcherProps) 
                     : "hover:bg-gray-50 dark:hover:bg-gray-700/50"
                 )}
               >
-                <MemberAvatar member={member} />
+                <RoleAvatar role={role} />
                 <div className="flex-1 text-left min-w-0">
                   <p
                     className={cn(
@@ -138,10 +147,10 @@ export function RoleSwitcher({ className, compact = false }: RoleSwitcherProps) 
                         : "text-gray-900 dark:text-gray-100"
                     )}
                   >
-                    {member.name}
+                    {role.name}
                   </p>
                   <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
-                    {member.mailboxAddress}
+                    {role.mailboxAddress}
                   </p>
                 </div>
                 {isActive && (

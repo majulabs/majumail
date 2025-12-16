@@ -6,9 +6,11 @@ import { Header } from "@/components/layout/Header";
 import { ThreadList } from "@/components/email/ThreadList";
 import { useThreadListPage } from "@/lib/hooks/useThreadListPage";
 import { useInboxShortcuts } from "@/lib/hooks/useKeyboardShortcuts";
+import { useRole } from "@/components/providers/RoleProvider";
 
 function SentContent() {
   const router = useRouter();
+  const { activeRole } = useRole();
 
   const {
     threads,
@@ -46,7 +48,7 @@ function SentContent() {
   return (
     <div className="h-full flex flex-col">
       <Header
-        title="Sent"
+        title={`Sent - ${activeRole.name}`}
         showSearch
         onRefresh={handleRefresh}
         isRefreshing={isRefreshing}
@@ -61,7 +63,7 @@ function SentContent() {
           onStarThread={handleStarThread}
           onArchiveThread={handleArchiveThread}
           onTrashThread={handleTrashThread}
-          emptyMessage="No sent emails"
+          emptyMessage={`No sent emails for ${activeRole.name}`}
         />
       </div>
     </div>

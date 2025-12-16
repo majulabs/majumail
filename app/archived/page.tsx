@@ -1,18 +1,14 @@
 "use client";
 
 import { Suspense } from "react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Archive, Star, ArchiveRestore, Trash2 } from "lucide-react";
+import { Star, Archive, ArchiveRestore, Trash2 } from "lucide-react";
+import { cn } from "@/lib/utils/cn";
 import { Header } from "@/components/layout/Header";
 import { Avatar } from "@/components/ui/Avatar";
 import { useThreadListPage } from "@/lib/hooks/useThreadListPage";
-import { cn } from "@/lib/utils/cn";
-import {
-  formatEmailDate,
-  truncate,
-  extractNameFromEmail,
-} from "@/lib/utils/format";
+import { useRole } from "@/components/providers/RoleProvider";
+import { formatEmailDate, truncate, getParticipantNames } from "@/lib/utils/format";
 import type { ThreadWithLabels } from "@/lib/types";
 
 interface ArchivedThreadItemProps {
@@ -28,9 +24,6 @@ function ArchivedThreadItem({
   onRestore,
   onTrash,
 }: ArchivedThreadItemProps) {
-  const participants = (thread.participantAddresses || []).slice(0, 3);
-  const participantNames = participants.map(extractNameFromEmail).join(", ");
-
   const handleAction = (
     e: React.MouseEvent,
     action: () => void
@@ -40,21 +33,20 @@ function ArchivedThreadItem({
     action();
   };
 
+  const participantNames = getParticipantNames(thread);
+
   return (
     <Link
       href={`/inbox/${thread.id}`}
-      className={cn(
-        "block px-4 py-3 border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors group",
-        !thread.isRead && "bg-blue-50/50 dark:bg-blue-900/10"
-      )}
+      className="block px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors group"
     >
       <div className="flex items-start gap-3">
-        <Avatar email={participants[0]} size="md" className="mt-0.5" />
+        <Avatar name={participantNames} size="sm" />
         <div className="flex-1 min-w-0">
-          <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
             <span
               className={cn(
-                "text-sm truncate",
+                "text-sm truncate flex-1",
                 !thread.isRead
                   ? "font-semibold text-gray-900 dark:text-gray-100"
                   : "text-gray-700 dark:text-gray-300"
@@ -114,7 +106,7 @@ function ArchivedThreadItem({
 }
 
 function ArchivedContent() {
-  const router = useRouter();
+  const { activeRole } = useRole();
 
   const {
     threads,
@@ -133,7 +125,7 @@ function ArchivedContent() {
   return (
     <div className="h-full flex flex-col">
       <Header
-        title="Archive"
+        title={`Archive - ${activeRole.name}`}
         showSearch
         onRefresh={handleRefresh}
         isRefreshing={isRefreshing}
@@ -158,7 +150,9 @@ function ArchivedContent() {
           <div className="flex flex-col items-center justify-center py-16 text-gray-500 dark:text-gray-400">
             <Archive className="h-16 w-16 mb-4 opacity-50" />
             <p className="text-lg font-medium">No archived emails</p>
-            <p className="text-sm">Emails you archive will appear here</p>
+            <p className="text-sm">
+              Archive emails to clean up your inbox
+            </p>
           </div>
         ) : (
           <div className="divide-y divide-gray-100 dark:divide-gray-800">

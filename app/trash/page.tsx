@@ -1,19 +1,15 @@
 "use client";
 
 import { Suspense } from "react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Trash2, Star, ArchiveRestore, AlertTriangle } from "lucide-react";
+import { Star, Trash2, ArchiveRestore } from "lucide-react";
+import { cn } from "@/lib/utils/cn";
 import { Header } from "@/components/layout/Header";
 import { Avatar } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
 import { useThreadListPage } from "@/lib/hooks/useThreadListPage";
-import { cn } from "@/lib/utils/cn";
-import {
-  formatEmailDate,
-  truncate,
-  extractNameFromEmail,
-} from "@/lib/utils/format";
+import { useRole } from "@/components/providers/RoleProvider";
+import { formatEmailDate, truncate, getParticipantNames } from "@/lib/utils/format";
 import type { ThreadWithLabels } from "@/lib/types";
 
 interface TrashThreadItemProps {
@@ -29,9 +25,6 @@ function TrashThreadItem({
   onRestore,
   onDeletePermanently,
 }: TrashThreadItemProps) {
-  const participants = (thread.participantAddresses || []).slice(0, 3);
-  const participantNames = participants.map(extractNameFromEmail).join(", ");
-
   const handleAction = (
     e: React.MouseEvent,
     action: () => void
@@ -41,21 +34,20 @@ function TrashThreadItem({
     action();
   };
 
+  const participantNames = getParticipantNames(thread);
+
   return (
     <Link
       href={`/inbox/${thread.id}`}
-      className={cn(
-        "block px-4 py-3 border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors group",
-        !thread.isRead && "bg-blue-50/50 dark:bg-blue-900/10"
-      )}
+      className="block px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors group"
     >
       <div className="flex items-start gap-3">
-        <Avatar email={participants[0]} size="md" className="mt-0.5" />
+        <Avatar name={participantNames} size="sm" />
         <div className="flex-1 min-w-0">
-          <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
             <span
               className={cn(
-                "text-sm truncate",
+                "text-sm truncate flex-1",
                 !thread.isRead
                   ? "font-semibold text-gray-900 dark:text-gray-100"
                   : "text-gray-700 dark:text-gray-300"
@@ -115,7 +107,7 @@ function TrashThreadItem({
 }
 
 function TrashContent() {
-  const router = useRouter();
+  const { activeRole } = useRole();
 
   const {
     threads,
@@ -133,13 +125,21 @@ function TrashContent() {
   });
 
   const confirmEmptyTrash = () => {
-    if (confirm("Are you sure you want to permanently delete all emails in trash? This cannot be undone.")) {
+    if (
+      confirm(
+        "Are you sure you want to permanently delete all emails in trash? This cannot be undone."
+      )
+    ) {
       handleEmptyTrash();
     }
   };
 
   const confirmDelete = (threadId: string) => {
-    if (confirm("Are you sure you want to permanently delete this email? This cannot be undone.")) {
+    if (
+      confirm(
+        "Are you sure you want to permanently delete this email? This cannot be undone."
+      )
+    ) {
       handleDeleteThread(threadId);
     }
   };
@@ -147,24 +147,11 @@ function TrashContent() {
   return (
     <div className="h-full flex flex-col">
       <Header
-        title="Trash"
+        title={`Trash - ${activeRole.name}`}
         showSearch
         onRefresh={handleRefresh}
         isRefreshing={isRefreshing}
       />
-      {threads.length > 0 && (
-        <div className="px-6 pt-4">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={confirmEmptyTrash}
-            className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:text-red-300 dark:hover:bg-red-900/20"
-          >
-            <Trash2 className="h-4 w-4 mr-2" />
-            Empty Trash
-          </Button>
-        </div>
-      )}
       <div className="flex-1 overflow-y-auto">
         {isLoading ? (
           <div className="divide-y divide-gray-100 dark:divide-gray-800">
@@ -185,16 +172,24 @@ function TrashContent() {
           <div className="flex flex-col items-center justify-center py-16 text-gray-500 dark:text-gray-400">
             <Trash2 className="h-16 w-16 mb-4 opacity-50" />
             <p className="text-lg font-medium">Trash is empty</p>
-            <p className="text-sm">Emails you delete will appear here</p>
+            <p className="text-sm">
+              Items in trash will be permanently deleted after 30 days
+            </p>
           </div>
         ) : (
           <>
-            {/* Warning banner */}
-            <div className="px-4 py-3 bg-amber-50 dark:bg-amber-900/20 border-b border-amber-200 dark:border-amber-800">
-              <div className="flex items-center gap-2 text-sm text-amber-700 dark:text-amber-300">
-                <AlertTriangle className="h-4 w-4" />
-                <span>Emails in Trash will be permanently deleted after 30 days</span>
-              </div>
+            {/* Empty Trash button */}
+            <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between">
+              <p className="text-sm text-gray-500 dark:text-gray-400">
+                {threads.length} item{threads.length !== 1 ? "s" : ""} in trash
+              </p>
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={confirmEmptyTrash}
+              >
+                Empty Trash
+              </Button>
             </div>
             <div className="divide-y divide-gray-100 dark:divide-gray-800">
               {threads.map((thread) => (

@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useSSE } from "./useSSE";
 import { useThreadOperations } from "./useThreadOperations";
+import { useRole } from "@/components/providers/RoleProvider";
 import type { ThreadWithLabels, ThreadFilter } from "@/lib/types";
 
 interface UseThreadListPageOptions {
@@ -59,6 +60,7 @@ interface UseThreadListPageReturn {
 /**
  * Hook for thread list pages
  * Encapsulates common logic for inbox, sent, starred, archived, trash, spam pages
+ * Automatically filters by the active role's mailbox
  */
 export function useThreadListPage(
   options: UseThreadListPageOptions = {}
@@ -72,6 +74,7 @@ export function useThreadListPage(
   } = options;
 
   const router = useRouter();
+  const { activeMailboxAddress, activeRoleId } = useRole();
   const [threads, setThreads] = useState<ThreadWithLabels[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -82,12 +85,15 @@ export function useThreadListPage(
   const recentChangesRef = useRef<Set<string>>(new Set());
 
   // Helper to mark a thread as recently changed
-  const markRecentChange = useCallback((threadId: string) => {
-    recentChangesRef.current.add(threadId);
-    setTimeout(() => {
-      recentChangesRef.current.delete(threadId);
-    }, sseDebounceMs);
-  }, [sseDebounceMs]);
+  const markRecentChange = useCallback(
+    (threadId: string) => {
+      recentChangesRef.current.add(threadId);
+      setTimeout(() => {
+        recentChangesRef.current.delete(threadId);
+      }, sseDebounceMs);
+    },
+    [sseDebounceMs]
+  );
 
   // Thread operations
   const threadOps = useThreadOperations({
@@ -99,21 +105,26 @@ export function useThreadListPage(
     },
   });
 
-  // Build fetch URL based on options
+  // Build fetch URL based on options - includes role filter
   const buildFetchUrl = useCallback(() => {
     const params = new URLSearchParams();
-    
+
     if (filter) {
       params.set("filter", filter);
     }
-    
+
     if (labelId) {
       params.set("labelId", labelId);
     }
 
+    // Add role filter - filter by the active mailbox
+    if (activeMailboxAddress) {
+      params.set("roleMailbox", activeMailboxAddress);
+    }
+
     const queryString = params.toString();
     return queryString ? `/api/threads?${queryString}` : "/api/threads";
-  }, [filter, labelId]);
+  }, [filter, labelId, activeMailboxAddress]);
 
   // Fetch threads
   const fetchThreads = useCallback(async () => {
@@ -130,15 +141,20 @@ export function useThreadListPage(
     }
   }, [buildFetchUrl]);
 
-  // Initial fetch
+  // Initial fetch and refetch when role changes
   useEffect(() => {
+    setIsLoading(true);
     fetchThreads();
-  }, [fetchThreads]);
+  }, [fetchThreads, activeRoleId]);
 
   // SSE handler
   useSSE(
     (event) => {
-      if (event.type === "new_email" || event.type === "thread_updated" || event.type === "label_changed") {
+      if (
+        event.type === "new_email" ||
+        event.type === "thread_updated" ||
+        event.type === "label_changed"
+      ) {
         const threadId = event.data?.threadId;
 
         // Skip SSE-triggered refresh if we just made a local change
@@ -163,101 +179,119 @@ export function useThreadListPage(
   }, [fetchThreads]);
 
   // Star/unstar thread
-  const handleStarThread = useCallback(async (threadId: string) => {
-    const thread = threads.find((t) => t.id === threadId);
-    if (!thread) return;
+  const handleStarThread = useCallback(
+    async (threadId: string) => {
+      const thread = threads.find((t) => t.id === threadId);
+      if (!thread) return;
 
-    markRecentChange(threadId);
+      markRecentChange(threadId);
 
-    const success = await threadOps.starThread(threadId, !!thread.isStarred);
-    
-    if (success) {
-      // Optimistic update for star toggle
-      setThreads((prev) =>
-        prev.map((t) =>
-          t.id === threadId ? { ...t, isStarred: !t.isStarred } : t
-        )
-      );
+      const success = await threadOps.starThread(threadId, !!thread.isStarred);
 
-      // For starred filter, remove if unstarring
-      if (filter === "starred" && thread.isStarred) {
-        setThreads((prev) => prev.filter((t) => t.id !== threadId));
+      if (success) {
+        // Optimistic update for star toggle
+        setThreads((prev) =>
+          prev.map((t) =>
+            t.id === threadId ? { ...t, isStarred: !t.isStarred } : t
+          )
+        );
+
+        // For starred filter, remove if unstarring
+        if (filter === "starred" && thread.isStarred) {
+          setThreads((prev) => prev.filter((t) => t.id !== threadId));
+        }
       }
-    }
-  }, [threads, markRecentChange, threadOps, filter]);
+    },
+    [threads, markRecentChange, threadOps, filter]
+  );
 
   // Archive thread
-  const handleArchiveThread = useCallback(async (threadId: string) => {
-    markRecentChange(threadId);
+  const handleArchiveThread = useCallback(
+    async (threadId: string) => {
+      markRecentChange(threadId);
 
-    const success = await threadOps.archiveThread(threadId);
-    
-    if (success) {
-      // Remove from current view (except archived view)
-      if (filter !== "archived") {
-        setThreads((prev) => prev.filter((t) => t.id !== threadId));
+      const success = await threadOps.archiveThread(threadId);
+
+      if (success) {
+        // Remove from current view (except archived view)
+        if (filter !== "archived") {
+          setThreads((prev) => prev.filter((t) => t.id !== threadId));
+        }
+        router.refresh();
       }
-      router.refresh();
-    }
-  }, [markRecentChange, threadOps, filter, router]);
+    },
+    [markRecentChange, threadOps, filter, router]
+  );
 
   // Trash thread
-  const handleTrashThread = useCallback(async (threadId: string) => {
-    markRecentChange(threadId);
+  const handleTrashThread = useCallback(
+    async (threadId: string) => {
+      markRecentChange(threadId);
 
-    const success = await threadOps.trashThread(threadId);
-    
-    if (success) {
-      // Remove from current view (except trash view)
-      if (filter !== "trash") {
-        setThreads((prev) => prev.filter((t) => t.id !== threadId));
+      const success = await threadOps.trashThread(threadId);
+
+      if (success) {
+        // Remove from current view (except trash view)
+        if (filter !== "trash") {
+          setThreads((prev) => prev.filter((t) => t.id !== threadId));
+        }
+        router.refresh();
       }
-      router.refresh();
-    }
-  }, [markRecentChange, threadOps, filter, router]);
+    },
+    [markRecentChange, threadOps, filter, router]
+  );
 
   // Restore thread
-  const handleRestoreThread = useCallback(async (threadId: string, fromTrash: boolean = true) => {
-    markRecentChange(threadId);
+  const handleRestoreThread = useCallback(
+    async (threadId: string, fromTrash: boolean = true) => {
+      markRecentChange(threadId);
 
-    const success = await threadOps.restoreThread(threadId, fromTrash);
-    
-    if (success) {
-      // Remove from current view (trash or archived)
-      setThreads((prev) => prev.filter((t) => t.id !== threadId));
-      router.refresh();
-    }
-  }, [markRecentChange, threadOps, router]);
+      const success = await threadOps.restoreThread(threadId, fromTrash);
+
+      if (success) {
+        // Remove from current view (trash or archived)
+        setThreads((prev) => prev.filter((t) => t.id !== threadId));
+        router.refresh();
+      }
+    },
+    [markRecentChange, threadOps, router]
+  );
 
   // Delete thread permanently
-  const handleDeleteThread = useCallback(async (threadId: string) => {
-    markRecentChange(threadId);
+  const handleDeleteThread = useCallback(
+    async (threadId: string) => {
+      markRecentChange(threadId);
 
-    const success = await threadOps.deleteThread(threadId);
-    
-    if (success) {
-      setThreads((prev) => prev.filter((t) => t.id !== threadId));
-      router.refresh();
-    }
-  }, [markRecentChange, threadOps, router]);
+      const success = await threadOps.deleteThread(threadId);
+
+      if (success) {
+        setThreads((prev) => prev.filter((t) => t.id !== threadId));
+        router.refresh();
+      }
+    },
+    [markRecentChange, threadOps, router]
+  );
 
   // Mark as not spam
-  const handleMarkAsNotSpam = useCallback(async (threadId: string) => {
-    markRecentChange(threadId);
+  const handleMarkAsNotSpam = useCallback(
+    async (threadId: string) => {
+      markRecentChange(threadId);
 
-    const success = await threadOps.markAsNotSpam(threadId);
-    
-    if (success) {
-      // Remove from spam view
-      setThreads((prev) => prev.filter((t) => t.id !== threadId));
-      router.refresh();
-    }
-  }, [markRecentChange, threadOps, router]);
+      const success = await threadOps.markAsNotSpam(threadId);
+
+      if (success) {
+        // Remove from spam view
+        setThreads((prev) => prev.filter((t) => t.id !== threadId));
+        router.refresh();
+      }
+    },
+    [markRecentChange, threadOps, router]
+  );
 
   // Mark all as read
   const handleMarkAllRead = useCallback(async () => {
     const unreadThreads = threads.filter((t) => !t.isRead);
-    
+
     await Promise.all(
       unreadThreads.map((thread) => threadOps.markAsRead(thread.id))
     );

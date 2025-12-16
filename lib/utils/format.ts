@@ -77,3 +77,10 @@ export function extractEmailAddress(email: string): string {
   const match = email.match(/<(.+)>/);
   return match ? match[1].toLowerCase() : email.toLowerCase().trim();
 }
+
+export function getParticipantNames(thread: { participantAddresses?: string[] | null }): string {
+  if (!thread.participantAddresses || thread.participantAddresses.length === 0) return "Unknown";
+  return thread.participantAddresses
+    .map(extractNameFromEmail)
+    .join(", ");
+}

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth/config";
 import { db } from "@/lib/db";
 import { threads, threadLabels, labels, emails } from "@/lib/db/schema";
-import { eq, desc, and, sql, inArray } from "drizzle-orm";
+import { eq, desc, and, sql, inArray, or } from "drizzle-orm";
 
 export async function GET(request: NextRequest) {
   const session = await auth();
@@ -14,6 +14,7 @@ export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
   const labelId = searchParams.get("labelId");
   const filter = searchParams.get("filter");
+  const roleMailbox = searchParams.get("roleMailbox");
   const limit = parseInt(searchParams.get("limit") || "50");
   const offset = parseInt(searchParams.get("offset") || "0");
 
@@ -23,9 +24,68 @@ export async function GET(request: NextRequest) {
   const isTrashedView = filter === "trash";
   const isSpamView = filter === "spam";
   const isSentView = filter === "sent";
+  const isInboxView = filter === "inbox" || (!filter && !labelId);
 
   try {
     let threadIds: string[] | undefined;
+
+    // If filtering by role mailbox, get threads where the mailbox is involved
+    if (roleMailbox) {
+      // For inbox view: emails received TO this mailbox (inbound)
+      // For sent view: emails sent FROM this mailbox (outbound)
+      // For other views: both sent and received by this mailbox
+
+      let roleThreadsQuery;
+
+      if (isInboxView) {
+        // Inbox: show threads with inbound emails TO this mailbox
+        roleThreadsQuery = await db
+          .selectDistinct({ threadId: emails.threadId })
+          .from(emails)
+          .where(
+            and(
+              eq(emails.direction, "inbound"),
+              or(
+                sql`${roleMailbox} = ANY(${emails.toAddresses})`,
+                sql`${roleMailbox} = ANY(${emails.ccAddresses})`
+              )
+            )
+          );
+      } else if (isSentView) {
+        // Sent: show threads with outbound emails FROM this mailbox
+        roleThreadsQuery = await db
+          .selectDistinct({ threadId: emails.threadId })
+          .from(emails)
+          .where(
+            and(
+              eq(emails.direction, "outbound"),
+              eq(emails.fromAddress, roleMailbox)
+            )
+          );
+      } else {
+        // Other views (starred, archived, trash, spam): show threads involving this mailbox
+        roleThreadsQuery = await db
+          .selectDistinct({ threadId: emails.threadId })
+          .from(emails)
+          .where(
+            or(
+              eq(emails.fromAddress, roleMailbox),
+              sql`${roleMailbox} = ANY(${emails.toAddresses})`,
+              sql`${roleMailbox} = ANY(${emails.ccAddresses})`
+            )
+          );
+      }
+
+      const roleThreadIds = roleThreadsQuery
+        .map((t) => t.threadId)
+        .filter((id): id is string => id !== null);
+
+      if (roleThreadIds.length === 0) {
+        return NextResponse.json({ threads: [], total: 0 });
+      }
+
+      threadIds = roleThreadIds;
+    }
 
     // If filtering by label
     if (labelId) {
@@ -34,7 +94,18 @@ export async function GET(request: NextRequest) {
         .from(threadLabels)
         .where(eq(threadLabels.labelId, labelId));
 
-      threadIds = labelThreads.map((t) => t.threadId);
+      const labelThreadIds = labelThreads.map((t) => t.threadId);
+
+      if (labelThreadIds.length === 0) {
+        return NextResponse.json({ threads: [], total: 0 });
+      }
+
+      if (threadIds) {
+        // Intersect with role-filtered threads
+        threadIds = threadIds.filter((id) => labelThreadIds.includes(id));
+      } else {
+        threadIds = labelThreadIds;
+      }
 
       if (threadIds.length === 0) {
         return NextResponse.json({ threads: [], total: 0 });
@@ -75,8 +146,8 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // If filtering by sent, get threads with outbound emails
-    if (isSentView) {
+    // If filtering by sent (without roleMailbox), get threads with outbound emails
+    if (isSentView && !roleMailbox) {
       const outboundThreads = await db
         .selectDistinct({ threadId: emails.threadId })
         .from(emails)
@@ -99,8 +170,18 @@ export async function GET(request: NextRequest) {
       if (threadIds.length === 0) {
         return NextResponse.json({ threads: [], total: 0 });
       }
-    } else if (!labelId && !isArchivedView && !isTrashedView && !isStarredView && !isSpamView) {
-      // Default inbox view: only show threads with inbound emails
+    }
+
+    // Default inbox view without role filter: only show threads with inbound emails
+    if (
+      isInboxView &&
+      !roleMailbox &&
+      !labelId &&
+      !isArchivedView &&
+      !isTrashedView &&
+      !isStarredView &&
+      !isSpamView
+    ) {
       const inboundThreads = await db
         .selectDistinct({ threadId: emails.threadId })
         .from(emails)
@@ -114,7 +195,11 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ threads: [], total: 0 });
       }
 
-      threadIds = inboundThreadIds;
+      if (threadIds) {
+        threadIds = threadIds.filter((id) => inboundThreadIds.includes(id));
+      } else {
+        threadIds = inboundThreadIds;
+      }
     }
 
     // Build where conditions

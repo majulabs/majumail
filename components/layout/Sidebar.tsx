@@ -4,20 +4,26 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { signOut, useSession } from "next-auth/react";
-import { PenSquare, Settings, LogOut, Menu, X, Users, Download, ChevronUp } from "lucide-react";
+import {
+  PenSquare,
+  Settings,
+  LogOut,
+  Menu,
+  X,
+  Users,
+  Download,
+  ChevronUp,
+  Check,
+} from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { Button } from "@/components/ui/Button";
-import { Avatar } from "@/components/ui/Avatar";
 import { LabelList } from "@/components/labels/LabelList";
-import { RoleSwitcher } from "@/components/role/RoleSwitcher";
 import { useSSE } from "@/lib/hooks/useSSE";
 import { useCompose } from "@/components/providers/ComposeProvider";
 import { useRole } from "@/components/providers/RoleProvider";
 import type { Label } from "@/lib/db/schema";
+import type { Role } from "@/lib/types/role";
 import { useState, useEffect, useCallback, useRef } from "react";
-
-// Optional PWA support - comment out if not using PWA features
-// import { usePWA } from "@/components/providers/PWAProvider";
 
 interface LabelWithCount extends Label {
   threadCount: number;
@@ -28,17 +34,32 @@ interface SidebarProps {
   className?: string;
 }
 
+function RoleAvatar({ role, size = "md" }: { role: Role; size?: "sm" | "md" }) {
+  const sizeClasses = size === "sm" ? "h-6 w-6 text-xs" : "h-8 w-8 text-sm";
+
+  return (
+    <div
+      className={cn(
+        "rounded-full flex items-center justify-center font-semibold text-white shrink-0",
+        sizeClasses
+      )}
+      style={{ backgroundColor: role.avatarColor }}
+    >
+      {role.name.charAt(0).toUpperCase()}
+    </div>
+  );
+}
+
 export function Sidebar({ className }: SidebarProps) {
   const { data: session, status } = useSession();
   const pathname = usePathname();
   const { openCompose } = useCompose();
-  const { activeRole } = useRole();
-  
-  // PWA support - uncomment if using PWAProvider
-  // const { isInstallable, installPWA } = usePWA();
-  const isInstallable = false; // Set to usePWA().isInstallable if using PWA
-  const installPWA = async () => {}; // Set to usePWA().installPWA if using PWA
-  
+  const { activeRole, activeRoleId, switchRole, allRoles } = useRole();
+
+  // PWA support - set to false if not using PWA
+  const isInstallable = false;
+  const installPWA = async () => {};
+
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [labels, setLabels] = useState<LabelWithCount[]>([]);
   const [inboxUnreadCount, setInboxUnreadCount] = useState(0);
@@ -89,7 +110,10 @@ export function Sidebar({ className }: SidebarProps) {
   // Close user menu when clicking outside
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
-      if (userMenuRef.current && !userMenuRef.current.contains(e.target as Node)) {
+      if (
+        userMenuRef.current &&
+        !userMenuRef.current.contains(e.target as Node)
+      ) {
         setShowUserMenu(false);
       }
     };
@@ -106,6 +130,12 @@ export function Sidebar({ className }: SidebarProps) {
   const handleComposeClick = () => {
     openCompose();
     setIsMobileOpen(false);
+  };
+
+  // Handle role switch
+  const handleRoleSwitch = (roleId: string) => {
+    switchRole(roleId as "marcel" | "julien" | "support" | "info");
+    setShowUserMenu(false);
   };
 
   // Close sidebar when pressing escape
@@ -143,9 +173,9 @@ export function Sidebar({ className }: SidebarProps) {
       <button
         onClick={() => setIsMobileOpen(true)}
         className="lg:hidden fixed top-3 left-3 z-40 p-2 bg-white dark:bg-gray-900 rounded-lg shadow-md border border-gray-200 dark:border-gray-700"
-        style={{ 
-          top: 'max(0.75rem, env(safe-area-inset-top, 0.75rem))',
-          left: 'max(0.75rem, env(safe-area-inset-left, 0.75rem))'
+        style={{
+          top: "max(0.75rem, env(safe-area-inset-top, 0.75rem))",
+          left: "max(0.75rem, env(safe-area-inset-left, 0.75rem))",
         }}
         aria-label="Open menu"
       >
@@ -171,18 +201,17 @@ export function Sidebar({ className }: SidebarProps) {
           className
         )}
         style={{
-          paddingTop: 'env(safe-area-inset-top, 0px)',
-          paddingBottom: 'env(safe-area-inset-bottom, 0px)',
+          paddingTop: "env(safe-area-inset-top, 0px)",
+          paddingBottom: "env(safe-area-inset-bottom, 0px)",
         }}
       >
-        {/* Header - ALIGNED with main content header (h-14 = 56px) */}
+        {/* Header */}
         <div className="flex items-center justify-between px-4 h-14 border-b border-gray-200 dark:border-gray-800 shrink-0">
           <Link
             href="/inbox"
             className="flex items-center gap-2"
             onClick={handleNavigation}
           >
-            {/* Custom MajuMail Icon */}
             <Image
               src="/mm-icon.svg"
               alt="MajuMail"
@@ -202,11 +231,6 @@ export function Sidebar({ className }: SidebarProps) {
           >
             <X className="h-5 w-5" />
           </button>
-        </div>
-
-        {/* Role Switcher */}
-        <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-800">
-          <RoleSwitcher />
         </div>
 
         {/* Compose Button */}
@@ -256,7 +280,7 @@ export function Sidebar({ className }: SidebarProps) {
             </Link>
           </div>
 
-          {/* Install PWA Button - only show if available */}
+          {/* Install PWA Button */}
           {isInstallable && (
             <div className="px-2 pb-2">
               <button
@@ -269,35 +293,83 @@ export function Sidebar({ className }: SidebarProps) {
             </div>
           )}
 
-          {/* User Menu - Opens UPWARD */}
-          <div className="px-2 py-2 border-t border-gray-200 dark:border-gray-800 relative" ref={userMenuRef}>
-            <button 
+          {/* User Menu with Role Switcher - Opens UPWARD */}
+          <div
+            className="px-2 py-2 border-t border-gray-200 dark:border-gray-800 relative"
+            ref={userMenuRef}
+          >
+            <button
               onClick={() => setShowUserMenu(!showUserMenu)}
               className="flex items-center gap-3 px-3 py-2.5 w-full rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
             >
-              <div
-                className="h-8 w-8 rounded-full flex items-center justify-center text-sm font-semibold text-white shrink-0"
-                style={{ backgroundColor: activeRole.avatarColor }}
-              >
-                {activeRole.name.charAt(0).toUpperCase()}
-              </div>
+              <RoleAvatar role={activeRole} />
               <div className="flex-1 text-left min-w-0">
                 <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
                   {activeRole.name}
                 </p>
                 <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
-                  {session.user.email}
+                  {activeRole.mailboxAddress}
                 </p>
               </div>
-              <ChevronUp className={cn(
-                "h-4 w-4 text-gray-400 transition-transform",
-                showUserMenu && "rotate-180"
-              )} />
+              <ChevronUp
+                className={cn(
+                  "h-4 w-4 text-gray-400 transition-transform",
+                  showUserMenu && "rotate-180"
+                )}
+              />
             </button>
 
             {/* Dropdown menu - Opens UPWARD */}
             {showUserMenu && (
               <div className="absolute bottom-full left-2 right-2 mb-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg overflow-hidden z-50">
+                {/* Role Switcher Section */}
+                <div className="px-3 py-2 border-b border-gray-100 dark:border-gray-700">
+                  <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                    View as
+                  </p>
+                </div>
+                <div className="py-1">
+                  {allRoles.map((role) => {
+                    const isActive = role.id === activeRoleId;
+                    return (
+                      <button
+                        key={role.id}
+                        onClick={() => handleRoleSwitch(role.id)}
+                        className={cn(
+                          "flex items-center gap-3 w-full px-3 py-2.5 transition-colors",
+                          isActive
+                            ? "bg-blue-50 dark:bg-blue-900/20"
+                            : "hover:bg-gray-50 dark:hover:bg-gray-700/50"
+                        )}
+                      >
+                        <RoleAvatar role={role} size="sm" />
+                        <div className="flex-1 text-left min-w-0">
+                          <p
+                            className={cn(
+                              "text-sm font-medium",
+                              isActive
+                                ? "text-blue-600 dark:text-blue-400"
+                                : "text-gray-900 dark:text-gray-100"
+                            )}
+                          >
+                            {role.name}
+                          </p>
+                          <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                            {role.mailboxAddress}
+                          </p>
+                        </div>
+                        {isActive && (
+                          <Check className="h-4 w-4 text-blue-600 dark:text-blue-400 shrink-0" />
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Divider */}
+                <div className="border-t border-gray-100 dark:border-gray-700" />
+
+                {/* Settings & Logout */}
                 <button
                   onClick={() => {
                     setShowUserMenu(false);

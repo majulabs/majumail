@@ -5,8 +5,11 @@ import { Header } from "@/components/layout/Header";
 import { ThreadList } from "@/components/email/ThreadList";
 import { useThreadListPage } from "@/lib/hooks/useThreadListPage";
 import { useInboxShortcuts } from "@/lib/hooks/useKeyboardShortcuts";
+import { useRole } from "@/components/providers/RoleProvider";
 
 function InboxContent() {
+  const { activeRole } = useRole();
+
   const {
     threads,
     isLoading,
@@ -44,7 +47,7 @@ function InboxContent() {
   return (
     <div className="h-full flex flex-col">
       <Header
-        title="Inbox"
+        title={`Inbox - ${activeRole.name}`}
         showSearch
         onRefresh={handleRefresh}
         isRefreshing={isRefreshing}
@@ -59,7 +62,7 @@ function InboxContent() {
           onStarThread={handleStarThread}
           onArchiveThread={handleArchiveThread}
           onTrashThread={handleTrashThread}
-          emptyMessage="Your inbox is empty"
+          emptyMessage={`No emails for ${activeRole.name}`}
         />
       </div>
     </div>

@@ -7,9 +7,11 @@ import { Header } from "@/components/layout/Header";
 import { ThreadList } from "@/components/email/ThreadList";
 import { useThreadListPage } from "@/lib/hooks/useThreadListPage";
 import { useInboxShortcuts } from "@/lib/hooks/useKeyboardShortcuts";
+import { useRole } from "@/components/providers/RoleProvider";
 
 function StarredContent() {
   const router = useRouter();
+  const { activeRole } = useRole();
 
   const {
     threads,
@@ -47,7 +49,7 @@ function StarredContent() {
   return (
     <div className="h-full flex flex-col">
       <Header
-        title="Starred"
+        title={`Starred - ${activeRole.name}`}
         showSearch
         onRefresh={handleRefresh}
         isRefreshing={isRefreshing}
@@ -57,7 +59,9 @@ function StarredContent() {
           <div className="flex flex-col items-center justify-center py-16 text-gray-500 dark:text-gray-400">
             <Star className="h-16 w-16 mb-4 opacity-50" />
             <p className="text-lg font-medium">No starred emails</p>
-            <p className="text-sm">Star emails to find them easily later</p>
+            <p className="text-sm">
+              Star emails to find them easily later
+            </p>
           </div>
         ) : (
           <ThreadList
@@ -69,7 +73,7 @@ function StarredContent() {
             onStarThread={handleStarThread}
             onArchiveThread={handleArchiveThread}
             onTrashThread={handleTrashThread}
-            emptyMessage="No starred emails"
+            emptyMessage={`No starred emails for ${activeRole.name}`}
           />
         )}
       </div>
