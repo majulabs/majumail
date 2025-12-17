@@ -1,5 +1,14 @@
 @import "tailwindcss";
 
+/* ==========================================
+   TAILWIND V4 DARK MODE CONFIGURATION
+   This is REQUIRED for dark: classes to work!
+   ========================================== */
+@variant dark (&:where(.dark, .dark *));
+
+/* ==========================================
+   CSS CUSTOM PROPERTIES
+   ========================================== */
 :root {
   --background: #ffffff;
   --foreground: #171717;
@@ -182,91 +191,8 @@ button,
   input[type="search"],
   textarea,
   select {
-    font-size: 16px !important;
+    font-size: 16px;
   }
-}
-
-/* iOS momentum scrolling */
-.overflow-y-auto,
-.overflow-x-auto,
-.overflow-auto {
-  -webkit-overflow-scrolling: touch;
-}
-
-/* Fix iOS safe area for fixed elements */
-.fixed-bottom {
-  padding-bottom: max(1rem, var(--safe-area-inset-bottom));
-}
-
-.fixed-top {
-  padding-top: max(0.5rem, var(--safe-area-inset-top));
-}
-
-/* ==========================================
-   EMAIL BODY STYLES
-   ========================================== */
-
-.email-body {
-  word-break: break-word;
-  overflow-wrap: break-word;
-}
-
-.email-body a {
-  color: #3b82f6;
-  text-decoration: underline;
-}
-
-.email-body img {
-  max-width: 100%;
-  height: auto;
-}
-
-.email-body blockquote {
-  border-left: 3px solid #d1d5db;
-  padding-left: 1rem;
-  margin-left: 0;
-  color: #6b7280;
-}
-
-.dark .email-body blockquote {
-  border-left-color: #4b5563;
-  color: #9ca3af;
-}
-
-/* Email body mobile optimization */
-@media (max-width: 640px) {
-  .email-body {
-    font-size: 15px;
-    line-height: 1.6;
-  }
-
-  .email-body img {
-    width: 100% !important;
-    height: auto !important;
-  }
-
-  .email-body table {
-    width: 100% !important;
-  }
-
-  .email-body td {
-    display: block;
-    width: 100% !important;
-  }
-}
-
-/* ==========================================
-   MOBILE NAVIGATION STYLES
-   ========================================== */
-
-/* Bottom navigation safe area */
-.mobile-bottom-nav {
-  padding-bottom: max(0.5rem, var(--safe-area-inset-bottom));
-}
-
-/* Mobile header safe area */
-.mobile-header {
-  padding-top: max(0.75rem, var(--safe-area-inset-top));
 }
 
 /* ==========================================
@@ -400,105 +326,81 @@ button,
    PULL TO REFRESH INDICATOR
    ========================================== */
 
-.pull-to-refresh-indicator {
+.pull-indicator {
   position: fixed;
   top: 0;
   left: 50%;
   transform: translateX(-50%);
-  z-index: 1000;
-  padding: 1rem;
-  pointer-events: none;
+  z-index: 100;
+  padding: 12px;
+  background: white;
+  border-radius: 0 0 8px 8px;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+}
+
+.dark .pull-indicator {
+  background: #1f2937;
 }
 
 /* ==========================================
-   MOBILE COMPOSE FLOATING BUTTON
+   MOBILE NAVIGATION SAFE AREAS
    ========================================== */
 
-.mobile-fab {
-  position: fixed;
-  bottom: max(1.5rem, calc(var(--safe-area-inset-bottom) + 1rem));
-  right: 1.5rem;
-  z-index: 40;
-  width: 56px;
-  height: 56px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-  transition: transform 0.2s, box-shadow 0.2s;
+.mobile-header {
+  padding-top: max(env(safe-area-inset-top), 8px);
 }
 
-.mobile-fab:active {
-  transform: scale(0.95);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+.mobile-bottom-nav {
+  padding-bottom: max(env(safe-area-inset-bottom), 8px);
 }
 
-@media (min-width: 1024px) {
-  .mobile-fab {
-    display: none;
-  }
-}
-
-/* ==========================================
-   UTILITY CLASSES
-   ========================================== */
-
-/* Safe area utilities */
-.pb-safe {
-  padding-bottom: var(--safe-area-inset-bottom);
-}
-
-.pt-safe {
-  padding-top: var(--safe-area-inset-top);
-}
-
-.pl-safe {
-  padding-left: var(--safe-area-inset-left);
-}
-
-.pr-safe {
-  padding-right: var(--safe-area-inset-right);
-}
-
-/* Touch-friendly spacing */
+/* Touch target helper class */
 .touch-target {
   min-height: 44px;
   min-width: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
-/* Hide on mobile */
-@media (max-width: 640px) {
-  .hide-mobile {
-    display: none !important;
-  }
+/* ==========================================
+   PROSE STYLES FOR EMAIL CONTENT
+   ========================================== */
+
+.prose {
+  line-height: 1.6;
 }
 
-/* Hide on desktop */
-@media (min-width: 641px) {
-  .hide-desktop {
-    display: none !important;
-  }
+.prose a {
+  color: #3b82f6;
+  text-decoration: underline;
 }
 
-/* Truncate text */
-.line-clamp-1 {
-  display: -webkit-box;
-  -webkit-line-clamp: 1;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
+.prose a:hover {
+  color: #2563eb;
 }
 
-.line-clamp-2 {
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
+.dark .prose {
+  color: #e5e7eb;
 }
 
-.line-clamp-3 {
-  display: -webkit-box;
-  -webkit-line-clamp: 3;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
+.dark .prose a {
+  color: #60a5fa;
+}
+
+.dark .prose a:hover {
+  color: #93c5fd;
+}
+
+/* Blockquote styling for email replies */
+.prose blockquote {
+  border-left: 3px solid #d1d5db;
+  padding-left: 1rem;
+  color: #6b7280;
+  margin: 1rem 0;
+}
+
+.dark .prose blockquote {
+  border-left-color: #4b5563;
+  color: #9ca3af;
 }

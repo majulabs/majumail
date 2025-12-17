@@ -56,8 +56,8 @@ export const metadata: Metadata = {
 
 export const viewport: Viewport = {
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#20293A" },
-    { media: "(prefers-color-scheme: dark)", color: "#20293A" },
+    { media: "(prefers-color-scheme: light)", color: "#f9fafb" },
+    { media: "(prefers-color-scheme: dark)", color: "#030712" },
   ],
   width: "device-width",
   initialScale: 1,
@@ -71,14 +71,26 @@ export default function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
-  // Theme script to prevent flash of wrong theme
+  // IMPORTANT: Theme script to prevent flash of wrong theme
+  // This runs BEFORE React hydrates, ensuring correct theme is applied immediately
   const themeScript = `
     (function() {
-      const theme = localStorage.getItem('theme') || 'system';
-      const systemDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-      const isDark = theme === 'dark' || (theme === 'system' && systemDark);
-      if (isDark) {
-        document.documentElement.classList.add('dark');
+      try {
+        const theme = localStorage.getItem('theme') || 'system';
+        const systemDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        const isDark = theme === 'dark' || (theme === 'system' && systemDark);
+        
+        // CRITICAL: Remove dark class for light mode, add for dark mode
+        if (isDark) {
+          document.documentElement.classList.add('dark');
+        } else {
+          document.documentElement.classList.remove('dark');
+        }
+      } catch (e) {
+        // If localStorage fails, default to system preference
+        if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+          document.documentElement.classList.add('dark');
+        }
       }
     })();
   `;
@@ -86,6 +98,7 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
+        {/* Theme script must be FIRST to prevent flash */}
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
         {/* PWA Meta Tags */}
         <link rel="icon" href="/mm-icon.svg" type="image/svg+xml" />
