@@ -165,8 +165,19 @@ export async function POST(request: NextRequest) {
       threadId = newThread.id;
     } else {
       // Update existing thread
-      // Use normalized (lowercase) addresses for storage
-      const participants = [normalizedFrom, ...normalizedTo, ...normalizedCc].map(extractEmailAddress);
+      // Get current thread to merge participants
+      const [existingThread] = await db
+        .select()
+        .from(threads)
+        .where(eq(threads.id, threadId))
+        .limit(1);
+
+      // Build new participants list (merge existing with new)
+      const newParticipants = [normalizedFrom, ...normalizedTo, ...normalizedCc].map(extractEmailAddress);
+      const existingParticipants = existingThread?.participantAddresses || [];
+      
+      // Merge and deduplicate participants
+      const mergedParticipants = [...new Set([...existingParticipants, ...newParticipants])];
       
       await db
         .update(threads)
@@ -174,7 +185,7 @@ export async function POST(request: NextRequest) {
           snippet: emailBody.substring(0, 150),
           lastMessageAt: new Date(),
           updatedAt: new Date(),
-          participantAddresses: sql`array_cat(${threads.participantAddresses}, ${participants}::text[])`,
+          participantAddresses: mergedParticipants,
         })
         .where(eq(threads.id, threadId));
     }
