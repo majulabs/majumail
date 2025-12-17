@@ -126,13 +126,15 @@ export default function ThreadPage() {
     }
   };
 
-  const handleAIAssist = async (instruction: string): Promise<string> => {
+  // Updated to accept optional existingBody for text modification
+  const handleAIAssist = async (instruction: string, existingBody?: string): Promise<string> => {
     const res = await fetch("/api/ai/compose", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         threadId,
         instruction,
+        existingBody: existingBody?.trim() ? existingBody : undefined,
       }),
     });
     const data = await res.json();

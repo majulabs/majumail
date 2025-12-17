@@ -48,11 +48,15 @@ export default function ComposePage() {
     }
   };
 
-  const handleAIAssist = async (instruction: string): Promise<string> => {
+  // Updated to accept existingBody parameter for text modification
+  const handleAIAssist = async (instruction: string, existingBody?: string): Promise<string> => {
     const res = await fetch("/api/ai/compose", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ instruction }),
+      body: JSON.stringify({ 
+        instruction,
+        existingBody: existingBody?.trim() ? existingBody : undefined,
+      }),
     });
     const data = await res.json();
     return data.draft || "";

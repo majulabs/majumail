@@ -13,6 +13,7 @@ import {
   Palette,
   Eye,
   Loader2,
+  Wand2,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { Button } from "@/components/ui/Button";
@@ -81,6 +82,9 @@ export function ComposeModal() {
   const [attachments, setAttachments] = useState<AttachmentUpload[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const templateRef = useRef<HTMLDivElement>(null);
+
+  // Check if there's existing text in the body
+  const hasExistingBody = body.trim().length > 0;
 
   // Fetch mailboxes when modal opens
   useEffect(() => {
@@ -228,7 +232,7 @@ export function ComposeModal() {
     }
   };
 
-  // AI Generate
+  // AI Generate - now handles both creation and modification
   const handleAIGenerate = async () => {
     if (!aiPrompt.trim()) return;
 
@@ -240,7 +244,9 @@ export function ComposeModal() {
         body: JSON.stringify({
           instruction: aiPrompt,
           threadId,
-          senderName: activeRole.name, // Use active role's name for signature
+          senderName: activeRole.name,
+          // Pass existing body if there is content - AI will modify it
+          existingBody: hasExistingBody ? body : undefined,
         }),
       });
 
@@ -309,22 +315,19 @@ export function ComposeModal() {
                 From
               </label>
               {mailboxes.length > 0 ? (
-                <div className="relative">
-                  <select
-                    value={from}
-                    onChange={(e) => setFrom(e.target.value)}
-                    className="w-full px-3 py-2 pr-8 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 appearance-none"
-                  >
-                    {mailboxes.map((mailbox) => (
-                      <option key={mailbox.id} value={mailbox.address}>
-                        {mailbox.displayName
-                          ? `${mailbox.displayName} <${mailbox.address}>`
-                          : mailbox.address}
-                      </option>
-                    ))}
-                  </select>
-                  <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
-                </div>
+                <select
+                  value={from}
+                  onChange={(e) => setFrom(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  {mailboxes.map((mailbox) => (
+                    <option key={mailbox.id} value={mailbox.address}>
+                      {mailbox.displayName
+                        ? `${mailbox.displayName} <${mailbox.address}>`
+                        : mailbox.address}
+                    </option>
+                  ))}
+                </select>
               ) : (
                 <div className="flex items-center gap-2 px-3 py-2 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg text-sm text-yellow-700 dark:text-yellow-300">
                   <Mail className="h-4 w-4" />
@@ -368,9 +371,9 @@ export function ComposeModal() {
                 onClick={() => setShowTemplateSelector(!showTemplateSelector)}
                 className={cn(
                   "w-full flex items-center justify-between gap-2 px-3 py-2",
-                  "border border-gray-300 dark:border-gray-600 rounded-lg",
-                  "bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100",
-                  "hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-left"
+                  "border border-gray-300 dark:border-gray-700 rounded-lg",
+                  "bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100",
+                  "hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
                 )}
               >
                 <div className="flex items-center gap-2">
@@ -381,42 +384,49 @@ export function ComposeModal() {
                   </span>
                 </div>
                 {showTemplateSelector ? (
-                  <ChevronUp className="h-4 w-4 text-gray-400 shrink-0" />
+                  <ChevronUp className="h-4 w-4 text-gray-400" />
                 ) : (
-                  <ChevronDown className="h-4 w-4 text-gray-400 shrink-0" />
+                  <ChevronDown className="h-4 w-4 text-gray-400" />
                 )}
               </button>
 
-              {/* Template dropdown */}
+              {/* Template Dropdown */}
               {showTemplateSelector && (
-                <div className="absolute top-full left-0 right-0 mt-1 z-10 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg overflow-hidden">
-                  {TEMPLATE_OPTIONS.map((template) => (
+                <div className="absolute z-10 mt-1 w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg overflow-hidden">
+                  {TEMPLATE_OPTIONS.map((option) => (
                     <button
-                      key={template.value}
+                      key={option.value}
                       type="button"
                       onClick={() => {
-                        setEmailTemplate(template.value);
+                        setEmailTemplate(option.value);
                         setShowTemplateSelector(false);
                       }}
                       className={cn(
-                        "w-full flex items-center gap-3 px-3 py-3 text-left transition-colors",
-                        emailTemplate === template.value
-                          ? "bg-blue-50 dark:bg-blue-900/20"
+                        "w-full flex items-start gap-3 px-3 py-2.5 text-left transition-colors",
+                        emailTemplate === option.value
+                          ? "bg-blue-50 dark:bg-blue-900/30"
                           : "hover:bg-gray-50 dark:hover:bg-gray-700"
                       )}
                     >
-                      <div className="flex-1">
-                        <p className={cn(
-                          "font-medium",
-                          emailTemplate === template.value
-                            ? "text-blue-600 dark:text-blue-400"
-                            : "text-gray-900 dark:text-gray-100"
-                        )}>
-                          {template.label}
-                        </p>
-                        <p className="text-sm text-gray-500 dark:text-gray-400">
-                          {template.description}
-                        </p>
+                      <div
+                        className={cn(
+                          "w-4 h-4 mt-0.5 rounded-full border-2 flex items-center justify-center",
+                          emailTemplate === option.value
+                            ? "border-blue-500 bg-blue-500"
+                            : "border-gray-300 dark:border-gray-600"
+                        )}
+                      >
+                        {emailTemplate === option.value && (
+                          <div className="w-2 h-2 rounded-full bg-white" />
+                        )}
+                      </div>
+                      <div>
+                        <div className="font-medium text-gray-900 dark:text-gray-100">
+                          {option.label}
+                        </div>
+                        <div className="text-xs text-gray-500 dark:text-gray-400">
+                          {option.description}
+                        </div>
                       </div>
                     </button>
                   ))}
@@ -430,7 +440,7 @@ export function ComposeModal() {
                 <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
                   Message
                 </label>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1">
                   <button
                     type="button"
                     onClick={() => setShowPreview(!showPreview)}
@@ -454,8 +464,12 @@ export function ComposeModal() {
                         : "text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-gray-800"
                     )}
                   >
-                    <Sparkles className="h-3.5 w-3.5" />
-                    AI Assist
+                    {hasExistingBody ? (
+                      <Wand2 className="h-3.5 w-3.5" />
+                    ) : (
+                      <Sparkles className="h-3.5 w-3.5" />
+                    )}
+                    {hasExistingBody ? "Modify with AI" : "AI Assist"}
                   </button>
                 </div>
               </div>
@@ -463,14 +477,32 @@ export function ComposeModal() {
               {/* AI Prompt Input */}
               {showAiPrompt && (
                 <div className="mb-2 p-3 bg-violet-50 dark:bg-violet-900/20 rounded-lg border border-violet-200 dark:border-violet-800">
-                  <p className="text-xs text-violet-600 dark:text-violet-400 mb-2">
-                    Describe what you want to write (e.g., "polite follow-up asking for project status")
-                  </p>
+                  {hasExistingBody ? (
+                    <>
+                      <div className="flex items-center gap-2 mb-2">
+                        <Wand2 className="h-4 w-4 text-violet-600 dark:text-violet-400" />
+                        <p className="text-xs font-medium text-violet-700 dark:text-violet-300">
+                          Modify existing text
+                        </p>
+                      </div>
+                      <p className="text-xs text-violet-600 dark:text-violet-400 mb-2">
+                        Describe how you want to change the current text (e.g., "make it more formal", "shorten it", "add a call to action", "translate to English")
+                      </p>
+                    </>
+                  ) : (
+                    <p className="text-xs text-violet-600 dark:text-violet-400 mb-2">
+                      Describe what you want to write (e.g., "polite follow-up asking for project status")
+                    </p>
+                  )}
                   <div className="flex gap-2">
                     <Input
                       value={aiPrompt}
                       onChange={(e) => setAiPrompt(e.target.value)}
-                      placeholder="What would you like to say?"
+                      placeholder={
+                        hasExistingBody
+                          ? "How should I modify the text?"
+                          : "What would you like to say?"
+                      }
                       className="flex-1 text-sm"
                       onKeyDown={(e) => {
                         if (e.key === "Enter" && !e.shiftKey) {
@@ -488,11 +520,36 @@ export function ComposeModal() {
                     >
                       {isGenerating ? (
                         <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : hasExistingBody ? (
+                        <Wand2 className="h-4 w-4" />
                       ) : (
                         <Sparkles className="h-4 w-4" />
                       )}
                     </Button>
                   </div>
+                  {/* Quick action suggestions for modification */}
+                  {hasExistingBody && (
+                    <div className="flex flex-wrap gap-1.5 mt-2">
+                      {[
+                        "Make it shorter",
+                        "More formal",
+                        "More friendly",
+                        "Add call to action",
+                        "Fix grammar",
+                        "Translate to English",
+                        "Translate to German",
+                      ].map((suggestion) => (
+                        <button
+                          key={suggestion}
+                          type="button"
+                          onClick={() => setAiPrompt(suggestion)}
+                          className="px-2 py-0.5 text-xs bg-white dark:bg-violet-900/30 border border-violet-200 dark:border-violet-700 rounded-full text-violet-700 dark:text-violet-300 hover:bg-violet-100 dark:hover:bg-violet-900/50 transition-colors"
+                        >
+                          {suggestion}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
 

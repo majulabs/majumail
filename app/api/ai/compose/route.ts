@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth/config";
-import { composeEmail } from "@/lib/ai/compose";
+import { composeEmail, improveDraft } from "@/lib/ai/compose";
 
 export async function POST(request: NextRequest) {
   const session = await auth();
@@ -11,7 +11,7 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json();
-    const { threadId, instruction, additionalContext, senderName } = body;
+    const { threadId, instruction, additionalContext, senderName, existingBody } = body;
 
     if (!instruction) {
       return NextResponse.json(
@@ -20,7 +20,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Generate draft using composeEmail (handles thread/context fetching internally)
+    // If there's existing body text, use improveDraft to modify it
+    if (existingBody && existingBody.trim()) {
+      const improvedDraft = await improveDraft(existingBody, instruction);
+      return NextResponse.json({ draft: improvedDraft });
+    }
+
+    // Otherwise, generate a new draft using composeEmail
     const result = await composeEmail({
       threadId,
       instruction,

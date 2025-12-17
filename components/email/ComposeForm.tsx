@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Send, Sparkles, ChevronDown, X } from "lucide-react";
+import { Send, Sparkles, ChevronDown, X, Wand2 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Textarea } from "@/components/ui/Textarea";
@@ -27,7 +27,8 @@ interface ComposeFormProps {
     inReplyTo?: string;
     references?: string[];
   }) => Promise<void>;
-  onAIAssist?: (instruction: string) => Promise<string>;
+  // Updated to accept optional existingBody parameter for text modification
+  onAIAssist?: (instruction: string, existingBody?: string) => Promise<string>;
   onCancel?: () => void;
   isCompact?: boolean;
 }
@@ -60,6 +61,9 @@ export function ComposeForm({
   const [aiInstruction, setAIInstruction] = useState("");
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
+
+  // Check if there's existing text in the body
+  const hasExistingBody = body.trim().length > 0;
 
   // Load contacts for autocomplete
   useEffect(() => {
@@ -97,12 +101,17 @@ export function ComposeForm({
     }
   };
 
+  // Updated to pass existing body for modification
   const handleAIGenerate = async () => {
     if (!aiInstruction.trim() || !onAIAssist) return;
 
     setIsAILoading(true);
     try {
-      const draft = await onAIAssist(aiInstruction);
+      // Pass existing body if there is content - AI will modify it
+      const draft = await onAIAssist(
+        aiInstruction,
+        hasExistingBody ? body : undefined
+      );
       setBody(draft);
       setShowAIPanel(false);
       setAIInstruction("");
@@ -150,7 +159,7 @@ export function ComposeForm({
           {onCancel && (
             <button
               onClick={onCancel}
-              className="p-1 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+              className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
             >
               <X className="h-5 w-5" />
             </button>
@@ -166,22 +175,17 @@ export function ComposeForm({
             <label className="w-16 text-sm text-gray-600 dark:text-gray-400">
               From
             </label>
-            <div className="relative flex-1">
-              <select
-                value={from}
-                onChange={(e) => setFrom(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 appearance-none"
-              >
-                {mailboxes.map((mailbox) => (
-                  <option key={mailbox.id} value={mailbox.address}>
-                    {mailbox.displayName
-                      ? `${mailbox.displayName} <${mailbox.address}>`
-                      : mailbox.address}
-                  </option>
-                ))}
-              </select>
-              <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
-            </div>
+            <select
+              value={from}
+              onChange={(e) => setFrom(e.target.value)}
+              className="flex-1 px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+            >
+              {mailboxes.map((m) => (
+                <option key={m.id} value={m.address}>
+                  {m.displayName ? `${m.displayName} <${m.address}>` : m.address}
+                </option>
+              ))}
+            </select>
           </div>
 
           {/* To */}
@@ -190,16 +194,17 @@ export function ComposeForm({
               To
             </label>
             <div className="flex-1">
-              <div className="flex flex-wrap gap-2 p-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900 min-h-[42px]">
+              <div className="flex flex-wrap gap-1 p-2 min-h-[42px] rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900">
                 {to.map((email) => (
                   <span
                     key={email}
-                    className="inline-flex items-center gap-1 px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded text-sm"
+                    className="inline-flex items-center gap-1 px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-100 rounded text-sm"
                   >
                     {email}
                     <button
+                      type="button"
                       onClick={() => removeRecipient(email, "to")}
-                      className="hover:text-blue-900 dark:hover:text-blue-100"
+                      className="hover:text-red-600"
                     >
                       <X className="h-3 w-3" />
                     </button>
@@ -207,7 +212,6 @@ export function ComposeForm({
                 ))}
                 <div className="relative flex-1 min-w-[150px]">
                   <input
-                    type="text"
                     value={toInput}
                     onChange={(e) => {
                       setToInput(e.target.value);
@@ -220,10 +224,6 @@ export function ComposeForm({
                       }
                     }}
                     onBlur={() => {
-                      // Add recipient on blur if there's valid input
-                      if (toInput.trim() && toInput.includes("@")) {
-                        addRecipient(toInput, "to");
-                      }
                       setTimeout(() => setShowSuggestions(false), 200);
                     }}
                     placeholder={to.length === 0 ? "Add recipients (press Enter)..." : ""}
@@ -257,7 +257,7 @@ export function ComposeForm({
                 onClick={() => setShowCc(!showCc)}
                 className="text-xs text-blue-600 hover:text-blue-700 mt-1"
               >
-                {showCc ? "Hide" : "Add"} CC
+                {showCc ? "Hide CC" : "Add CC"}
               </button>
             </div>
           </div>
@@ -269,7 +269,7 @@ export function ComposeForm({
                 CC
               </label>
               <div className="flex-1">
-                <div className="flex flex-wrap gap-2 p-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900 min-h-[42px]">
+                <div className="flex flex-wrap gap-1 p-2 min-h-[42px] rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900">
                   {cc.map((email) => (
                     <span
                       key={email}
@@ -277,15 +277,15 @@ export function ComposeForm({
                     >
                       {email}
                       <button
+                        type="button"
                         onClick={() => removeRecipient(email, "cc")}
-                        className="hover:text-gray-900 dark:hover:text-gray-100"
+                        className="hover:text-red-600"
                       >
                         <X className="h-3 w-3" />
                       </button>
                     </span>
                   ))}
                   <input
-                    type="text"
                     value={ccInput}
                     onChange={(e) => setCcInput(e.target.value)}
                     onKeyDown={(e) => {
@@ -324,10 +324,19 @@ export function ComposeForm({
                 <button
                   type="button"
                   onClick={() => setShowAIPanel(!showAIPanel)}
-                  className="inline-flex items-center gap-1.5 text-sm text-purple-600 hover:text-purple-700"
+                  className={cn(
+                    "inline-flex items-center gap-1.5 text-sm",
+                    hasExistingBody
+                      ? "text-violet-600 hover:text-violet-700"
+                      : "text-purple-600 hover:text-purple-700"
+                  )}
                 >
-                  <Sparkles className="h-4 w-4" />
-                  AI Assist
+                  {hasExistingBody ? (
+                    <Wand2 className="h-4 w-4" />
+                  ) : (
+                    <Sparkles className="h-4 w-4" />
+                  )}
+                  {hasExistingBody ? "Modify with AI" : "AI Assist"}
                 </button>
               )}
             </div>
@@ -335,25 +344,66 @@ export function ComposeForm({
             {/* AI Panel */}
             {showAIPanel && (
               <div className="mb-4 p-4 bg-purple-50 dark:bg-purple-900/20 rounded-lg border border-purple-200 dark:border-purple-800">
-                <div className="flex gap-2 mb-3 flex-wrap">
-                  {["Reply positively", "Politely decline", "Request more info"].map(
-                    (preset) => (
-                      <button
-                        key={preset}
-                        type="button"
-                        onClick={() => setAIInstruction(preset)}
-                        className="px-2 py-1 text-xs bg-white dark:bg-gray-800 border border-purple-200 dark:border-purple-700 rounded hover:bg-purple-100 dark:hover:bg-purple-900"
-                      >
-                        {preset}
-                      </button>
-                    )
-                  )}
-                </div>
+                {hasExistingBody ? (
+                  <>
+                    <div className="flex items-center gap-2 mb-2">
+                      <Wand2 className="h-4 w-4 text-violet-600 dark:text-violet-400" />
+                      <p className="text-sm font-medium text-violet-700 dark:text-violet-300">
+                        Modify existing text
+                      </p>
+                    </div>
+                    <p className="text-xs text-violet-600 dark:text-violet-400 mb-3">
+                      Describe how you want to change the current text (e.g., "make it more formal", "shorten it", "add a call to action")
+                    </p>
+                    {/* Quick suggestions for modification */}
+                    <div className="flex gap-2 mb-3 flex-wrap">
+                      {[
+                        "Make it shorter",
+                        "More formal",
+                        "More friendly",
+                        "Add call to action",
+                        "Fix grammar",
+                        "Translate to English",
+                        "Translate to German",
+                      ].map((preset) => (
+                        <button
+                          key={preset}
+                          type="button"
+                          onClick={() => setAIInstruction(preset)}
+                          className="px-2 py-1 text-xs bg-white dark:bg-purple-900/30 border border-purple-200 dark:border-purple-700 rounded-full text-purple-700 dark:text-purple-300 hover:bg-purple-100 dark:hover:bg-purple-900/50 transition-colors"
+                        >
+                          {preset}
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="flex gap-2 mb-3 flex-wrap">
+                      {["Reply positively", "Politely decline", "Request more info"].map(
+                        (preset) => (
+                          <button
+                            key={preset}
+                            type="button"
+                            onClick={() => setAIInstruction(preset)}
+                            className="px-2 py-1 text-xs bg-white dark:bg-gray-800 border border-purple-200 dark:border-purple-700 rounded hover:bg-purple-100 dark:hover:bg-purple-900"
+                          >
+                            {preset}
+                          </button>
+                        )
+                      )}
+                    </div>
+                  </>
+                )}
                 <div className="flex gap-2">
                   <Input
                     value={aiInstruction}
                     onChange={(e) => setAIInstruction(e.target.value)}
-                    placeholder="Describe what you want to write..."
+                    placeholder={
+                      hasExistingBody
+                        ? "How should I modify the text?"
+                        : "Describe what you want to write..."
+                    }
                     className="flex-1"
                     onKeyDown={(e) => {
                       if (e.key === "Enter") {
@@ -366,7 +416,7 @@ export function ComposeForm({
                     isLoading={isAILoading}
                     disabled={!aiInstruction.trim()}
                   >
-                    Generate
+                    {hasExistingBody ? "Modify" : "Generate"}
                   </Button>
                 </div>
               </div>
