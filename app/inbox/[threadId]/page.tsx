@@ -3,8 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { ThreadView } from "@/components/email/ThreadView";
-import { ComposeForm } from "@/components/email/ComposeForm";
-import { Modal } from "@/components/ui/Modal";
+import { useCompose } from "@/components/providers/ComposeProvider";
 import type { Thread, Email, Label, Mailbox } from "@/lib/db/schema";
 
 interface ThreadWithRelations extends Thread {
@@ -17,12 +16,12 @@ export default function ThreadPage() {
   const router = useRouter();
   const threadId = params.threadId as string;
   const hasRefreshed = useRef(false);
+  const { openCompose } = useCompose();
 
   const [thread, setThread] = useState<ThreadWithRelations | null>(null);
   const [allLabels, setAllLabels] = useState<Label[]>([]);
   const [mailboxes, setMailboxes] = useState<Mailbox[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [showReply, setShowReply] = useState(false);
 
   const fetchThread = useCallback(async () => {
     try {
@@ -94,51 +93,48 @@ export default function ThreadPage() {
     }
   };
 
-  const handleSendReply = async (data: {
-    from: string;
-    to: string[];
-    cc: string[];
-    subject: string;
-    body: string;
-  }) => {
+  // Handle reply - open the global compose modal with all necessary context
+  const handleReply = () => {
     if (!thread) return;
 
+    // Get the last email to reply to
     const lastEmail = thread.emails[thread.emails.length - 1];
+    
+    // Get reply-to address (from the last inbound email, or other participants)
+    const lastInboundEmail = [...thread.emails]
+      .reverse()
+      .find((e) => e.direction === "inbound");
+    
+    const replyToAddress = lastInboundEmail
+      ? lastInboundEmail.fromAddress
+      : thread.participantAddresses?.find(
+          (a) => !mailboxes.some((m) => m.address.toLowerCase() === a.toLowerCase())
+        ) || "";
 
-    try {
-      await fetch("/api/emails/send", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ...data,
-          subject: thread.subject?.startsWith("Re:")
-            ? thread.subject
-            : `Re: ${thread.subject}`,
-          replyToThreadId: threadId,
-          inReplyTo: lastEmail?.messageId,
-          references: lastEmail?.referencesHeader || [],
-        }),
-      });
-      setShowReply(false);
-      fetchThread();
-    } catch (error) {
-      console.error("Failed to send reply:", error);
+    // Build references header for proper email threading
+    const references = lastEmail?.referencesHeader 
+      ? [...lastEmail.referencesHeader]
+      : [];
+    
+    if (lastEmail?.messageId && !references.includes(lastEmail.messageId)) {
+      references.push(lastEmail.messageId);
     }
-  };
 
-  // Updated to accept optional existingBody for text modification
-  const handleAIAssist = async (instruction: string, existingBody?: string): Promise<string> => {
-    const res = await fetch("/api/ai/compose", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        threadId,
-        instruction,
-        existingBody: existingBody?.trim() ? existingBody : undefined,
-      }),
+    // Open the compose modal with reply context
+    openCompose({
+      threadId,
+      to: replyToAddress,
+      subject: thread.subject?.startsWith("Re:")
+        ? thread.subject
+        : `Re: ${thread.subject || ""}`,
+      replyTo: {
+        from: replyToAddress,
+        subject: thread.subject || "",
+        messageId: lastEmail?.messageId || undefined,
+        references,
+      },
+      previousEmails: thread.emails,
     });
-    const data = await res.json();
-    return data.draft || "";
   };
 
   if (isLoading) {
@@ -162,16 +158,6 @@ export default function ThreadPage() {
       </div>
     );
   }
-
-  // Get reply-to address
-  const lastInboundEmail = [...thread.emails]
-    .reverse()
-    .find((e) => e.direction === "inbound");
-  const replyTo = lastInboundEmail
-    ? [lastInboundEmail.fromAddress]
-    : thread.participantAddresses?.filter(
-        (a) => !mailboxes.some((m) => m.address === a)
-      ) || [];
 
   return (
     <div className="h-full flex flex-col">
@@ -197,32 +183,9 @@ export default function ThreadPage() {
           }}
           onAddLabel={addLabel}
           onRemoveLabel={removeLabel}
-          onReply={() => setShowReply(true)}
+          onReply={handleReply}
         />
       </div>
-
-      {/* Reply modal */}
-      <Modal
-        isOpen={showReply}
-        onClose={() => setShowReply(false)}
-        title="Reply"
-        size="lg"
-      >
-        <ComposeForm
-          mailboxes={mailboxes}
-          defaultTo={replyTo}
-          defaultSubject={
-            thread.subject?.startsWith("Re:")
-              ? thread.subject
-              : `Re: ${thread.subject}`
-          }
-          replyToThreadId={threadId}
-          onSend={handleSendReply}
-          onAIAssist={handleAIAssist}
-          onCancel={() => setShowReply(false)}
-          isCompact
-        />
-      </Modal>
     </div>
   );
 }

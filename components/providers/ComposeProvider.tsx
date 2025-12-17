@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useState, useCallback, ReactNode } from "react";
 import { ComposeModal } from "@/components/compose/ComposeModal";
+import type { Email } from "@/lib/db/schema";
 
 interface ReplyTo {
   from: string;
@@ -16,11 +17,13 @@ interface ComposeContextType {
   threadId: string | null;
   defaultTo: string;
   defaultSubject: string;
+  previousEmails: Email[];
   openCompose: (options?: {
     replyTo?: ReplyTo;
     threadId?: string;
     to?: string;
     subject?: string;
+    previousEmails?: Email[];
   }) => void;
   closeCompose: () => void;
 }
@@ -45,6 +48,7 @@ export function ComposeProvider({ children }: ComposeProviderProps) {
   const [threadId, setThreadId] = useState<string | null>(null);
   const [defaultTo, setDefaultTo] = useState("");
   const [defaultSubject, setDefaultSubject] = useState("");
+  const [previousEmails, setPreviousEmails] = useState<Email[]>([]);
 
   const openCompose = useCallback(
     (options?: {
@@ -52,11 +56,13 @@ export function ComposeProvider({ children }: ComposeProviderProps) {
       threadId?: string;
       to?: string;
       subject?: string;
+      previousEmails?: Email[];
     }) => {
       setReplyTo(options?.replyTo || null);
       setThreadId(options?.threadId || null);
       setDefaultTo(options?.to || "");
       setDefaultSubject(options?.subject || "");
+      setPreviousEmails(options?.previousEmails || []);
       setIsOpen(true);
     },
     []
@@ -70,6 +76,7 @@ export function ComposeProvider({ children }: ComposeProviderProps) {
       setThreadId(null);
       setDefaultTo("");
       setDefaultSubject("");
+      setPreviousEmails([]);
     }, 200);
   }, []);
 
@@ -81,6 +88,7 @@ export function ComposeProvider({ children }: ComposeProviderProps) {
         threadId,
         defaultTo,
         defaultSubject,
+        previousEmails,
         openCompose,
         closeCompose,
       }}
