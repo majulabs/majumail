@@ -31,11 +31,17 @@ export async function POST(request: NextRequest) {
       attachmentIds,
     } = body;
 
-    // Validate from address is in mailboxes
+    // Normalize email addresses to lowercase for consistent storage and querying
+    const normalizedFrom = from.toLowerCase();
+    const normalizedTo = to.map((email: string) => email.toLowerCase());
+    const normalizedCc = cc?.map((email: string) => email.toLowerCase()) || [];
+    const normalizedBcc = bcc?.map((email: string) => email.toLowerCase()) || [];
+
+    // Validate from address is in mailboxes (case-insensitive)
     const [mailbox] = await db
       .select()
       .from(mailboxes)
-      .where(eq(mailboxes.address, from))
+      .where(sql`LOWER(${mailboxes.address}) = ${normalizedFrom}`)
       .limit(1);
 
     if (!mailbox) {
@@ -76,7 +82,7 @@ export async function POST(request: NextRequest) {
       headers["References"] = references.join(" ");
     }
 
-    // Send via Resend
+    // Send via Resend (use original casing for display purposes)
     const fromWithName = mailbox.displayName
       ? `${mailbox.displayName} <${from}>`
       : from;
@@ -127,7 +133,7 @@ export async function POST(request: NextRequest) {
 
     const result = await sendEmail({
       from: fromWithName,
-      to,
+      to, // Use original casing for email delivery
       cc,
       bcc,
       subject,
@@ -142,7 +148,8 @@ export async function POST(request: NextRequest) {
 
     if (!threadId) {
       // Create new thread for new conversation
-      const participants = [from, ...to, ...(cc || [])].map(extractEmailAddress);
+      // Use normalized (lowercase) addresses for storage
+      const participants = [normalizedFrom, ...normalizedTo, ...normalizedCc].map(extractEmailAddress);
 
       const [newThread] = await db
         .insert(threads)
@@ -158,7 +165,8 @@ export async function POST(request: NextRequest) {
       threadId = newThread.id;
     } else {
       // Update existing thread
-      const participants = [from, ...to, ...(cc || [])].map(extractEmailAddress);
+      // Use normalized (lowercase) addresses for storage
+      const participants = [normalizedFrom, ...normalizedTo, ...normalizedCc].map(extractEmailAddress);
       
       await db
         .update(threads)
@@ -171,18 +179,18 @@ export async function POST(request: NextRequest) {
         .where(eq(threads.id, threadId));
     }
 
-    // Store the sent email
+    // Store the sent email with normalized (lowercase) email addresses
     const [newEmail] = await db
       .insert(emails)
       .values({
         threadId,
         resendId: result.id,
         direction: "outbound",
-        fromAddress: from,
+        fromAddress: normalizedFrom, // Store lowercase for consistent querying
         fromName: mailbox.displayName,
-        toAddresses: to,
-        ccAddresses: cc || [],
-        bccAddresses: bcc || [],
+        toAddresses: normalizedTo, // Store lowercase for consistent querying
+        ccAddresses: normalizedCc,
+        bccAddresses: normalizedBcc,
         subject,
         bodyText: emailBody,
         bodyHtml: finalHtml, // Store the generated HTML
@@ -218,8 +226,8 @@ export async function POST(request: NextRequest) {
         .onConflictDoNothing();
     }
 
-    // Update contacts
-    const allRecipients = [...to, ...(cc || []), ...(bcc || [])];
+    // Update contacts (use normalized addresses)
+    const allRecipients = [...normalizedTo, ...normalizedCc, ...normalizedBcc];
     for (const recipient of allRecipients) {
       const email = extractEmailAddress(recipient);
       await db

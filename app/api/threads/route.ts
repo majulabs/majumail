@@ -35,10 +35,14 @@ export async function GET(request: NextRequest) {
       // For sent view: emails sent FROM this mailbox (outbound)
       // For other views: both sent and received by this mailbox
 
+      // Normalize the roleMailbox to lowercase for comparison
+      const roleMailboxLower = roleMailbox.toLowerCase();
+
       let roleThreadsQuery;
 
       if (isInboxView) {
         // Inbox: show threads with inbound emails TO this mailbox
+        // Use case-insensitive comparison for email addresses
         roleThreadsQuery = await db
           .selectDistinct({ threadId: emails.threadId })
           .from(emails)
@@ -46,32 +50,34 @@ export async function GET(request: NextRequest) {
             and(
               eq(emails.direction, "inbound"),
               or(
-                sql`${roleMailbox} = ANY(${emails.toAddresses})`,
-                sql`${roleMailbox} = ANY(${emails.ccAddresses})`
+                sql`LOWER(${emails.toAddresses}::text) LIKE '%' || ${roleMailboxLower} || '%'`,
+                sql`LOWER(${emails.ccAddresses}::text) LIKE '%' || ${roleMailboxLower} || '%'`
               )
             )
           );
       } else if (isSentView) {
         // Sent: show threads with outbound emails FROM this mailbox
+        // Use case-insensitive comparison for fromAddress
         roleThreadsQuery = await db
           .selectDistinct({ threadId: emails.threadId })
           .from(emails)
           .where(
             and(
               eq(emails.direction, "outbound"),
-              eq(emails.fromAddress, roleMailbox)
+              sql`LOWER(${emails.fromAddress}) = ${roleMailboxLower}`
             )
           );
       } else {
         // Other views (starred, archived, trash, spam): show threads involving this mailbox
+        // Use case-insensitive comparison for all address fields
         roleThreadsQuery = await db
           .selectDistinct({ threadId: emails.threadId })
           .from(emails)
           .where(
             or(
-              eq(emails.fromAddress, roleMailbox),
-              sql`${roleMailbox} = ANY(${emails.toAddresses})`,
-              sql`${roleMailbox} = ANY(${emails.ccAddresses})`
+              sql`LOWER(${emails.fromAddress}) = ${roleMailboxLower}`,
+              sql`LOWER(${emails.toAddresses}::text) LIKE '%' || ${roleMailboxLower} || '%'`,
+              sql`LOWER(${emails.ccAddresses}::text) LIKE '%' || ${roleMailboxLower} || '%'`
             )
           );
       }
